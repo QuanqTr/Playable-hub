@@ -1,0 +1,132 @@
+import { expect, test, type Page } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+
+const fixture = "http://127.0.0.1:54329";
+const ownerId = "11111111-1111-4111-8111-111111111111";
+const secondOwnerId = "22222222-2222-4222-8222-222222222222";
+
+async function login(page: Page) {
+  await page.goto("/login");
+  await page.getByLabel("Email công việc", { exact: true }).fill("member@example.test");
+  await page.getByLabel("Mật khẩu", { exact: true }).fill("Test-password-123");
+  await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+  await expect(page).toHaveURL(/\/projects$/);
+}
+
+test.beforeEach(async ({ request }) => {
+  await request.post(`${fixture}/__test/reset`, { data: { seed: true } });
+});
+
+test("login protection, project creation/edit, logout and mobile layout", async ({ page }) => {
+  await page.goto("/playables");
+  await expect(page).toHaveURL(/\/login/);
+  await login(page);
+  await page.getByRole("button", { name: "Tạo dự án", exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Tạo dự án", exact: true });
+  await form.getByLabel("Tên dự án").fill("Dự án E2E");
+  await form.getByLabel("Mô tả").fill("Mô tả được lưu qua server action.");
+  await form.getByLabel("Người phụ trách").selectOption(ownerId);
+  await form.getByRole("button", { name: "Tạo dự án", exact: true }).click();
+  await expect(form).toBeHidden();
+  await page.getByRole("link", { name: "Dự án E2E", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Dự án E2E", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).click();
+  const edit = page.getByRole("dialog", { name: "Chỉnh sửa dự án", exact: true });
+  await edit.getByLabel("Người phụ trách").selectOption(secondOwnerId);
+  await edit.getByLabel("Trạng thái", { exact: true }).selectOption("paused");
+  await edit.getByRole("button", { name: "Lưu thay đổi" }).click();
+  await expect(edit).toBeHidden();
+  await page.reload();
+  await expect(page.getByText("Minh Trần", { exact: true })).toBeVisible();
+  await expect(page.getByText("Tạm dừng", { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.getByRole("button", { name: "Đăng xuất", exact: true }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await page.goto("/projects");
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test("server pagination, combined URL filters, URL build edit, panel close and archive restore", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await login(page);
+  await page.getByRole("link", { name: "Kho playable", exact: true }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(12);
+  await mkdir("artifacts/qa", { recursive: true });
+  await page.screenshot({ path: "artifacts/qa/desktop.png", fullPage: true });
+  await page.getByRole("link", { name: "Trang sau" }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await page.goto("/playables");
+  await page.getByRole("button", { name: "Thêm playable", exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Thêm playable", exact: true });
+  await form.getByLabel("Tên playable").fill("Build URL E2E");
+  await form.getByLabel("Dự án", { exact: false }).selectOption({ label: "Dự án mẫu" });
+  await form.getByLabel("URL lưu trữ").fill("https://cdn.example.test/e2e.html");
+  await form.getByLabel("Unity Ads", { exact: true }).check();
+  await form.getByLabel("Mức độ win").selectOption("winning");
+  await form.getByRole("button", { name: "Lưu playable" }).click();
+  await expect(form).toBeHidden();
+  await page.getByRole("search").getByLabel("Tìm kiếm", { exact: true }).fill("Build URL E2E");
+  await page.getByRole("search").getByLabel("Mức độ win").selectOption("winning");
+  await page.getByRole("search").getByLabel("Network", { exact: true }).selectOption("unity-ads");
+  await page.getByRole("button", { name: "Áp dụng" }).click();
+  await expect(page).toHaveURL(/q=Build\+URL\+E2E/);
+  await expect(page.locator("tbody tr")).toHaveCount(1);
+  const filteredUrl = page.url();
+  await page.getByRole("link", { name: "Build URL E2E", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Build URL E2E", exact: true });
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "Chỉnh sửa playable" }).click();
+  const edit = page.getByRole("dialog", { name: "Chỉnh sửa playable", exact: true });
+  await expect(edit.getByLabel("URL lưu trữ")).toBeDisabled();
+  await edit.getByLabel("Ghi chú", { exact: true }).fill("Kết quả được giữ sau khi reload.");
+  await edit.getByLabel("Mức độ win").selectOption("scaling");
+  await edit.getByRole("button", { name: "Lưu thay đổi" }).click();
+  await expect(edit).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole("dialog").getByText("Kết quả được giữ sau khi reload.", { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.screenshot({ path: "artifacts/qa/mobile.png" });
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.getByRole("link", { name: "Đóng chi tiết playable" }).click();
+  await expect(page).toHaveURL(filteredUrl);
+  await expect(page.getByText("Không tìm thấy kết quả", { exact: false })).toBeVisible();
+  await page.getByRole("search").getByRole("link", { name: "Xóa bộ lọc" }).click();
+  await page.getByRole("link", { name: "Build URL E2E", exact: true }).click();
+  await page.getByRole("dialog", { name: "Build URL E2E" }).getByRole("button", { name: "Lưu trữ", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Lưu trữ", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await page.goto("/playables?archived=true");
+  await page.getByRole("link", { name: "Build URL E2E", exact: true }).click();
+  await page.getByRole("dialog", { name: "Build URL E2E" }).getByRole("button", { name: "Khôi phục", exact: true }).click();
+  await page.goto("/playables?q=Build+URL+E2E");
+  await expect(page.getByRole("link", { name: "Build URL E2E", exact: true })).toBeVisible();
+});
+
+test("direct file upload/download and database failure retain input and clean new assets", async ({ page, request }) => {
+  await login(page);
+  await page.goto("/playables");
+  await page.getByRole("button", { name: "Thêm playable", exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Thêm playable", exact: true });
+  await form.getByLabel("Tên playable").fill("Build file E2E");
+  await form.getByLabel("Dự án", { exact: false }).selectOption({ label: "Dự án mẫu" });
+  const contents = "<!doctype html><title>Exact uploaded test build</title>";
+  await form.getByLabel("File build HTML / ZIP").setInputFiles({ name: "e2e-build.html", mimeType: "text/html", buffer: Buffer.from(contents) });
+  await request.post(`${fixture}/__test/fail-next`, { data: { kind: "playable" } });
+  await form.getByRole("button", { name: "Lưu playable" }).click();
+  await expect(form.getByRole("alert")).toContainText("lưu dữ liệu thất bại");
+  await expect(form.getByLabel("Tên playable")).toHaveValue("Build file E2E");
+  await expect.poll(async () => (await (await request.get(`${fixture}/__test/state`)).json()).objectCount).toBe(0);
+  await form.getByRole("button", { name: "Lưu playable" }).click();
+  await expect(form).toBeHidden();
+  await page.getByRole("link", { name: "Build file E2E", exact: true }).click();
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Tải file", exact: true }).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe("e2e-build.html");
+  const stream = await download.createReadStream();
+  const chunks = []; for await (const chunk of stream!) chunks.push(chunk);
+  expect(Buffer.concat(chunks).toString()).toBe(contents);
+});

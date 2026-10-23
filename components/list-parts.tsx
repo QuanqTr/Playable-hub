@@ -1,0 +1,15 @@
+import Link from "next/link";
+import { Archive, ChevronLeft, ChevronRight, FileSearch, FolderOpen, Library } from "lucide-react";
+import { queryHref } from "@/lib/utils";
+import type { Filters } from "@/lib/types";
+import { Button } from "./ui/button";
+export function ViewTabs({ path, filters, noun }: { path: string; filters: Filters; noun: string }) {
+  const archived = filters.archived === "true";
+  return <nav className="view-tabs" aria-label="Chế độ lưu trữ"><Link href={queryHref(path, { ...filters }, { archived: null, page: null, playable: null })} className={`view-tab ${!archived ? "active" : ""}`} aria-current={!archived ? "page" : undefined}><Library size={13} />{noun}</Link><Link href={queryHref(path, { ...filters }, { archived: "true", page: null, playable: null })} className={`view-tab ${archived ? "active" : ""}`} aria-current={archived ? "page" : undefined}><Archive size={13} />Đã lưu trữ</Link></nav>;
+}
+export function ResultsHeading({ total, noun, archived }: { total: number; noun: string; archived?: boolean }) { return <div className="results-heading"><span><strong>{total.toLocaleString("vi-VN")}</strong> {noun}{archived ? " đã lưu trữ" : ""}</span><span>Sắp xếp theo cập nhật mới nhất</span></div>; }
+export function Pagination({ total, page, pageSize, path, filters }: { total: number; page: number; pageSize: number; path: string; filters: Filters }) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  return <nav className="pagination" aria-label="Phân trang"><span>{total ? `${Math.min((page - 1) * pageSize + 1, total)}–${Math.min(page * pageSize, total)} trên ${total} kết quả` : "0 kết quả"}</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" asChild disabled={page <= 1}><Link aria-label="Trang trước" aria-disabled={page <= 1} className={page <= 1 ? "pointer-events-none opacity-40" : ""} tabIndex={page <= 1 ? -1 : undefined} href={queryHref(path, { ...filters }, { page: String(Math.max(1, page - 1)), playable: null })}><ChevronLeft /></Link></Button><span className="px-2">Trang {page} / {pages}</span><Button variant="outline" size="sm" asChild disabled={page >= pages}><Link aria-label="Trang sau" aria-disabled={page >= pages} className={page >= pages ? "pointer-events-none opacity-40" : ""} tabIndex={page >= pages ? -1 : undefined} href={queryHref(path, { ...filters }, { page: String(page + 1), playable: null })}><ChevronRight /></Link></Button></div></nav>;
+}
+export function EmptyState({ filtered, archived, noun, action }: { filtered: boolean; archived: boolean; noun: "dự án" | "playable"; action?: React.ReactNode }) { return <div className="empty-state"><div className="empty-state-icon">{filtered ? <FileSearch size={24} /> : archived ? <Archive size={24} /> : <FolderOpen size={24} />}</div><h2>{filtered ? "Không tìm thấy kết quả" : archived ? `Chưa có ${noun} được lưu trữ` : `Chưa có ${noun} nào`}</h2><p>{filtered ? "Thử thay đổi từ khóa hoặc xóa bộ lọc để tìm kiếm lại." : archived ? "Các mục được lưu trữ sẽ xuất hiện tại đây để bạn có thể khôi phục." : `Bắt đầu bằng cách thêm ${noun} đầu tiên vào kho tài sản chung của đội ngũ.`}</p>{action}</div>; }

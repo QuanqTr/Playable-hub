@@ -23,6 +23,7 @@ let playables = [];
 let serial = 0;
 let lastTime = Date.now();
 let failNext = null;
+let delayNext = null;
 const objects = new Map();
 const signedTokens = new Map();
 
@@ -49,11 +50,29 @@ function makePlayable(values) {
   serial += 1;
   return { id: randomUUID(), code: `PL-${String(serial).padStart(6, "0")}`, name: "", project_id: projectId, win_level: "unreviewed", external_url: "https://cdn.example.test/build.html", storage_path: null, file_name: null, file_size: null, file_mime: null, thumbnail_path: null, released_at: null, notes: null, archived_at: null, created_by: userId, updated_by: userId, created_at: now, updated_at: now, network_ids: ["unity-ads"], ...values };
 }
+// Self-contained ad creatives for local visual QA only. No remote images, fonts,
+// analytics or production data are needed to exercise HTML capture and play.
+function previewHtml(index) {
+  const themes = [
+    { title: "NEON DRIFT", label: "RACE THE NIGHT", background: "#11152d", glow: "#a858ff", accent: "#7df9e5", scene: `<path d="M125 65h140l110 360H15z" fill="#282345"/><path d="M188 65h14l4 65h-22zm-8 105h30l6 95h-44zm-16 145h60l12 110h-84z" fill="#f7d3ff"/><path d="m125 65-110 360m250-360 110 360" stroke="#e54dff" stroke-width="7"/><ellipse cx="196" cy="343" rx="85" ry="22" fill="#a858ff" opacity=".5"/><path d="m133 260 20-58h82l23 58 8 77H124z" fill="#7df9e5"/><path d="m161 214-12 48h92l-15-48z" fill="#182344"/><path d="M135 290h26m71 0h23" stroke="#fff" stroke-width="10"/><path d="M146 324h98" stroke="#44b7ad" stroke-width="5"/>` },
+    { title: "GARDEN MERGE", label: "GROW YOUR LITTLE WORLD", background: "#123d37", glow: "#81d887", accent: "#f4d16d", scene: `<ellipse cx="195" cy="318" rx="174" ry="69" fill="#32634d"/><path d="m41 263 154-66 153 66-153 77z" fill="#b4d99b"/><path d="m41 263 154 77 153-77v45l-153 77L41 308z" fill="#75b37b"/><path d="M194 266V147m0 56c-85 3-80-78-80-78 73-4 80 78 80 78m1-22c78 1 80-76 80-76-76-6-80 76-80 76" stroke="#4e8e66" stroke-width="7" fill="#b4eb89"/><path d="M88 278v-51m0 18c-45 3-42-37-42-37 35-4 42 37 42 37m0-4c40 2 42-36 42-36-36-3-42 36-42 36" stroke="#447f58" stroke-width="5" fill="#f4d16d"/><path d="M289 278v-54" stroke="#447f58" stroke-width="6"/><circle cx="289" cy="215" r="30" fill="#ff9fba"/><circle cx="289" cy="215" r="11" fill="#ffe98a"/><circle cx="195" cy="107" r="24" fill="#f4d16d"/>` },
+    { title: "COSMIC MATCH", label: "ONE MOVE. PURE MAGIC.", background: "#24204a", glow: "#d18cf5", accent: "#ffa55c", scene: `<circle cx="195" cy="225" r="150" fill="#42306a"/><path d="m195 90 58 86-58 87-58-87z" fill="#b8afff"/><path d="m195 90 12 86-12 87-58-87z" fill="#7e6fe3"/><path d="m85 204 48 64-48 65-48-65z" fill="#ffbc6d"/><path d="m85 204 9 64-9 65-48-65z" fill="#ee874d"/><path d="m300 204 48 64-48 65-48-65z" fill="#78dfd3"/><path d="m300 204 9 64-9 65-48-65z" fill="#3bb8ad"/><path d="m195 280 51 68-51 67-51-67z" fill="#f7a3d0"/><path d="m195 280 9 68-9 67-51-67z" fill="#d665a6"/><path d="m54 122 7 18 19 6-19 6-7 18-7-18-19-6 19-6zm270-43 6 16 17 5-17 5-6 16-6-16-17-5 17-5z" fill="#ffe5b1"/>` },
+    { title: "CASTLE QUEST", label: "YOUR KINGDOM AWAITS", background: "#163757", glow: "#80c7e7", accent: "#ffc575", scene: `<circle cx="280" cy="108" r="56" fill="#f9d7a4"/><path d="m0 325 84-135 77 92 60-159 169 202v100H0z" fill="#315270"/><path d="m0 368 92-81 83 72 100-128 115 137v57H0z" fill="#486781"/><path d="M91 207h53v155H91zm155 0h53v155h-53z" fill="#b4c9d7"/><path d="M88 198h60v23H88zm155 0h60v23h-60z" fill="#dae7ed"/><path d="m85 198 33-48 33 48zm155 0 33-48 33 48z" fill="#d77a6c"/><path d="M141 254h108v110H141z" fill="#d4e2e8"/><path d="M179 364v-62c0-25 33-25 33 0v62" fill="#476480"/><path d="M191 254v-90m0 0 56 18-56 17z" stroke="#ffc575" stroke-width="5" fill="#ffc575"/>` },
+  ];
+  const theme = themes[(index - 1) % themes.length];
+  return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${theme.title}</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{font-family:Arial,sans-serif;background:${theme.background};color:white}.creative{position:relative;width:100%;height:100%;min-height:500px;overflow:hidden;background:radial-gradient(ellipse at 50% 38%,${theme.glow}44,transparent 62%)}.tag{position:absolute;top:25px;left:24px;font-size:10px;letter-spacing:2px;opacity:.65}.score{position:absolute;right:22px;top:21px;padding:7px 10px;border:1px solid #ffffff36;border-radius:20px;font-size:11px}.copy{position:absolute;top:76px;width:100%;padding:0 22px;text-align:center}.copy p{font-size:10px;letter-spacing:3px;color:${theme.accent};margin:0 0 10px}.copy h1{margin:0;font-weight:900;font-size:39px;line-height:.96;letter-spacing:-2px;text-shadow:0 5px 24px ${theme.background}}svg{position:absolute;width:100%;height:63%;left:0;top:23%}.bottom{position:absolute;bottom:27px;left:23px;right:23px;text-align:center}.bottom p{font-size:12px;color:#ffffffbb;letter-spacing:.2px;margin:0 0 15px}button{border:0;background:${theme.accent};color:${theme.background};border-radius:16px;padding:17px 20px;width:100%;font-weight:800;font-size:16px;box-shadow:0 8px 25px #0004;cursor:pointer}.dots{font-size:14px;letter-spacing:7px;opacity:.5;margin-top:17px}</style></head><body><main class="creative"><span class="tag">PLAYABLE STUDIO</span><span class="score">LEVEL ${String(index).padStart(2, "0")}</span><div class="copy"><p>${theme.label}</p><h1>${theme.title}</h1></div><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 440">${theme.scene}</svg><div class="bottom"><p id="message">A little challenge. A big adventure.</p><button id="start" onclick="document.getElementById('message').textContent='Bạn đã bắt đầu!';this.textContent='Chơi lại'">Bắt đầu chơi</button><div class="dots">● ○ ○</div></div></main></body></html>`;
+}
 function reset(seed = true) {
-  projects = []; playables = []; serial = 0; failNext = null; objects.clear(); signedTokens.clear();
+  projects = []; playables = []; serial = 0; failNext = null; delayNext = null; objects.clear(); signedTokens.clear();
   if (seed) {
     projects.push(makeProject({ id: projectId, name: "Dự án mẫu", description: "Dữ liệu fixture dành riêng cho kiểm thử." }));
-    for (let i = 1; i <= 14; i += 1) playables.push(makePlayable({ name: `Playable mẫu ${String(i).padStart(2, "0")}`, win_level: i % 2 ? "testing" : "winning", notes: `Ghi chú mẫu ${i}` }));
+    const names = ["Neon Drift", "Garden Merge", "Cosmic Match", "Castle Quest"];
+    for (let i = 1; i <= 14; i += 1) {
+      const storagePath = `${userId}/${randomUUID()}.html`;
+      const bytes = Buffer.from(previewHtml(i));
+      objects.set(`playable-builds/${storagePath}`, { bytes, type: "text/html" });
+      playables.push(makePlayable({ name: `${names[(i - 1) % names.length]} · Concept ${String(i).padStart(2, "0")}`, win_level: i % 2 ? "testing" : "winning", notes: `Creative HTML fixture ${i}, chỉ dùng trong kiểm thử.`, external_url: null, storage_path: storagePath, file_name: `creative-${i}.html`, file_mime: "text/html", file_size: bytes.length, released_at: "2026-10-24" }));
+    }
   }
 }
 reset();
@@ -94,6 +113,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/__test/health") return send(res, 200, { fixture: true });
     if (url.pathname === "/__test/reset" && req.method === "POST") { const data = JSON.parse((await body(req)).toString() || "{}"); reset(data.seed !== false); return send(res, 200, { ok: true }); }
     if (url.pathname === "/__test/fail-next" && req.method === "POST") { failNext = JSON.parse((await body(req)).toString()).kind; return send(res, 200, { ok: true }); }
+    if (url.pathname === "/__test/delay-next" && req.method === "POST") { const data = JSON.parse((await body(req)).toString()); delayNext = { kind: data.kind, ms: Math.max(0, Math.min(2000, Number(data.ms) || 0)) }; return send(res, 200, { ok: true }); }
     if (url.pathname === "/__test/state") return send(res, 200, { projects, playables, objectCount: objects.size });
 
     if (url.pathname === "/auth/v1/token" && req.method === "POST") {
@@ -138,6 +158,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === "/rest/v1/rpc/list_playables") {
+      if (delayNext?.kind === "playables") { const { ms } = delayNext; delayNext = null; await new Promise(resolve => setTimeout(resolve, ms)); }
       const { p_filters: f = {} } = JSON.parse((await body(req)).toString());
       const rows = sorted(playables.filter(p => {
         const pr = projects.find(project => project.id === p.project_id);

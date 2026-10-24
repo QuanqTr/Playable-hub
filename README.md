@@ -6,6 +6,19 @@ Kho playable ads nội bộ theo dự án, triển khai theo [document.md](docum
 
 Production: **[playable-hub-nu.vercel.app](https://playable-hub-nu.vercel.app)**. Source: [QuanqTr/Playable-hub](https://github.com/QuanqTr/Playable-hub). Supabase project: `mslinuppummnkdtguqet`.
 
+## Gallery và xem trực tiếp
+
+Theo yêu cầu mở rộng sau MVP, kho playable dùng **card có ảnh lớn** thay cho bảng. Bấm ảnh để chạy thử; bấm tên để xem hoặc chỉnh sửa thông tin. Bộ lọc nâng cao nằm trong nút **Bộ lọc**; tìm kiếm, phân trang và URL chia sẻ vẫn được giữ lại.
+
+- Chuyển trang có shimmer theo bố cục đích và phản hồi ngay khi bấm link. Hai trang chính được tải trước; các liên kết chi tiết chỉ tải trước khi rê chuột hoặc focus. Dữ liệu nội bộ chỉ được memoize trong một request, không cache dùng chung giữa thành viên.
+- HTML tự tạo ảnh bìa khi chọn file và lưu ảnh vào bucket thumbnail hiện có. Có thể chọn ảnh riêng để thay thế. Với build cũ chưa có ảnh, ứng dụng tạo ảnh khi card ở gần màn hình và giữ tạm trong bộ nhớ của tab.
+- Mỗi lần chỉ có một tác vụ tải HTML và tạo ảnh. Tác vụ bị hủy khi card ra khỏi vùng nhìn hoặc khi mở trình xem trực tiếp; iframe tạo ảnh được gỡ sau khi hoàn tất. Trình xem có màn hình dọc/ngang, chạy lại và dừng hẳn khi đóng.
+- HTML chạy trong iframe có origin cách ly, chỉ bật script; không truy cập phiên đăng nhập hoặc DOM ứng dụng. Server xác thực và áp dụng RLS trước khi cấp URL ngắn hạn; trình duyệt tải file trực tiếp từ Storage rồi chuyển nội dung HTML vào sandbox.
+- HTML cần đóng gói tài nguyên bên trong file hoặc dùng URL tuyệt đối. Tài nguyên ngoài bị chặn CORS, canvas không cho đọc ảnh hoặc HTML chưa sẵn sàng có thể khiến ảnh tự động không tạo được; khi đó có thể tải ảnh riêng và vẫn mở trình xem. Ảnh bìa là một khung hình tham khảo, không phải kết quả đánh giá Win.
+- URL ngoài có thể xem trong iframe nếu website nguồn cho phép; luôn có liên kết mở bản gốc. Không tự chụp ảnh URL ngoài. ZIP vẫn tải xuống, không giải nén hoặc thực thi trong ứng dụng; có thể bổ sung URL để xem thử.
+
+Tính năng này dùng các bảng và private bucket hiện có, không cần migration mới.
+
 ## Chạy local
 
 Yêu cầu Node.js 22 trở lên và pnpm 10.32.1. Các phiên bản đã được khóa trong `pnpm-lock.yaml`; TypeScript 5.9 và ESLint 9 được chọn để tương thích với bộ lint của Next.js 16.
@@ -50,7 +63,7 @@ Migration chạy trong transaction và chỉ chạy một lần trên schema m�
 
 Không cần tạo bucket public hoặc thêm policy thủ công. Nếu điều chỉnh giới hạn kho, cập nhật đồng thời `lib/constants.ts`, schema validation, constraint SQL, `storage.buckets.file_size_limit` và cấu hình Storage tổng. Đây là giới hạn kho, không phải tiêu chuẩn của ad network.
 
-Upload đi trực tiếp từ trình duyệt đến Storage, tên object dạng `user-id/random-uuid.ext`, không overwrite. Database chỉ lưu object path. `/api/files/[id]` xác thực ở server rồi cấp redirect sang signed URL có thời hạn 60 giây; file build dùng chế độ tải xuống. HTML/ZIP không được giải nén hay chạy trong ứng dụng. Thumbnail có endpoint riêng `?thumbnail=true`. Xóa file chỉ dùng Storage API, không xóa trực tiếp metadata trong `storage.objects`. [Tài liệu Storage](https://supabase.com/docs/guides/storage/security/access-control), [xóa object](https://supabase.com/docs/guides/storage/management/delete-objects).
+Upload đi trực tiếp từ trình duyệt đến Storage, tên object dạng `user-id/random-uuid.ext`, không overwrite. Database chỉ lưu object path. `/api/files/[id]` xác thực ở server rồi cấp redirect sang signed URL có thời hạn 60 giây; file build dùng chế độ tải xuống. HTML được xem trong sandbox cách ly qua `/api/preview/[id]`; ZIP không được giải nén. Thumbnail có endpoint riêng `?thumbnail=true`. Xóa file chỉ dùng Storage API, không xóa trực tiếp metadata trong `storage.objects`. [Tài liệu Storage](https://supabase.com/docs/guides/storage/security/access-control), [xóa object](https://supabase.com/docs/guides/storage/management/delete-objects).
 
 ### 2. Tắt đăng ký công khai
 
@@ -113,7 +126,7 @@ Mọi tài khoản đã được mời/tạo bởi quản trị viên có quyề
 
 - **Dự án**: tạo/sửa tên, mô tả, owner và trạng thái. `completed` chỉ là trạng thái; lưu trữ là thao tác riêng có xác nhận.
 - **Chi tiết dự án**: quản lý playable trong dự án, nút thêm tự điền dự án hiện tại.
-- **Kho playable**: bảng toàn công ty, thumbnail, owner dự án, network, win, ngày triển khai và ngày cập nhật.
+- **Kho playable**: gallery toàn công ty với ảnh preview lớn, dự án, network và Win; chi tiết đầy đủ nằm trong panel.
 - **Tìm kiếm**: tên dự án, tên hoặc mã playable. Kết hợp các bộ lọc rồi bấm **Áp dụng**. Từ khóa, bộ lọc và trang nằm trong URL.
 - **Panel chi tiết**: mở tên playable hoặc menu thao tác. `?playable=<uuid>` có thể chia sẻ; đóng panel giữ bộ lọc/trang. `/playables/<uuid>` chuyển đến panel tương ứng.
 - **File hoặc URL**: cần ít nhất một; nguồn build được khóa sau khi lưu. **Tạo bản sao** sao chép metadata và yêu cầu nguồn mới, mã mới, win mặc định “Chưa đánh giá”.
@@ -137,6 +150,7 @@ pnpm verify
 - `tests/server.test.ts`: mock backend để kiểm tra xác thực trước ghi, payload RPC transaction, lỗi database, audit từ phiên, signed download và callback an toàn.
 - `tests/upload.test.ts`: upload trực tiếp, tiến độ theo byte, MIME/header, không overwrite, cleanup sau timeout/mất kết nối và xử lý lỗi cleanup.
 - `tests/auth-redirect.test.ts`: liên kết Invite/Recovery mặc định, token thiếu/sai, xác minh phiên và lỗi callback không lộ token.
+- `tests/preview.test.ts`: xác thực/RLS trước khi ký nguồn HTML, JSON private, sandbox cách ly, giới hạn dung lượng, tải không kèm cookie, hàng đợi tạo ảnh và hủy tác vụ.
 - `tests/database.mjs`: chạy migration trên **PGlite/PostgreSQL thực thi SQL** với schema Auth/Storage stub; kiểm tra RLS, cộng tác, audit, bất biến build, rollback transaction, policy Storage và phân trang. Không thay thế kiểm tra dịch vụ Supabase thật.
 - `supabase/tests/database.test.sql`: pgTAP cho Supabase local/test; xem [hướng dẫn kiểm tra database](supabase/tests/README.md).
 - `node --env-file=.env.local scripts/check-supabase.mjs`: kiểm tra kết nối chỉ đọc bằng public key. Anonymous bị chặn là kết quả đúng; script không thể chứng minh đầy đủ quyền thành viên hoặc schema chỉ bằng phản hồi ẩn danh.
@@ -171,21 +185,25 @@ Không cần worker, queue, backend riêng hay service-role key. File được u
 
 Project hiện được kết nối với GitHub và deploy tự động từ nhánh `main`. Migration ban đầu đã được áp dụng qua SQL Editor; nếu về sau dùng Supabase CLI `db push`, cần đánh dấu migration `202610230001` đã áp dụng bằng `supabase migration repair --status applied 202610230001` trước, để không chạy lại lệnh tạo bảng.
 
+`vercel.json` đặt Functions tại **Sydney (`syd1`)**. Trước bản tối ưu, Vercel chạy ở `iad1` (Mỹ), trong khi DNS máy chủ database Supabase nằm trong prefix AWS `ap-southeast-2`; đây là đối chiếu hạ tầng công khai, không phải số đo hiệu năng. Nếu chuyển Supabase project, kiểm tra lại vị trí database và điều chỉnh region tương ứng. [Vercel regions](https://vercel.com/docs/regions), [cấu hình region](https://vercel.com/docs/functions/configuring-functions/region), [prefix AWS](https://ip-ranges.amazonaws.com/ip-ranges.json).
+
 ## Cấu trúc chính
 
 ```text
 app/(hub)/               Trang được bảo vệ, dự án và kho playable
 app/auth/                Xác nhận thư mời/recovery và PKCE callback
 app/api/files/[id]/      Signed download/thumbnail sau khi xác thực
+app/api/preview/[id]/    Nguồn preview có thời hạn sau khi xác thực và RLS
 components/              Bảng, filter, form, panel, xác nhận lưu trữ
 components/ui/           Các primitive shadcn/ui sử dụng Radix
 lib/actions.ts           Server actions kiểm tra dữ liệu và phiên
 lib/data.ts              Truy vấn phía server, phân trang, RLS
 lib/upload.ts            Upload trực tiếp có tiến độ và cleanup
+lib/preview*.ts          Sandbox HTML, chụp ảnh và hàng đợi có giới hạn
 lib/supabase/            Client/server factories và cấu hình
 proxy.ts                 Làm mới và xác minh cookie phiên Supabase SSR
 supabase/                Migration, Auth local config, pgTAP/integration scripts
 tests/                   Validation, server, PostgreSQL và browser tests
 ```
 
-MVP không có preview HTML, dashboard biểu đồ, Kanban, vai trò theo dự án, AI, bình luận hoặc API ad network.
+Ứng dụng không có dashboard biểu đồ, Kanban, vai trò theo dự án, AI, bình luận hoặc API ad network. Gallery và preview HTML là phần mở rộng theo yêu cầu sau MVP.

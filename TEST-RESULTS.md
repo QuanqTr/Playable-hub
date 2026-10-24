@@ -10,10 +10,10 @@ Production: [playable-hub-nu.vercel.app](https://playable-hub-nu.vercel.app). So
 | --- | --- | --- |
 | `pnpm typecheck` | PASS | TypeScript strict, toàn bộ ứng dụng và test |
 | `pnpm lint` | PASS | Không lỗi, không warning ESLint |
-| `pnpm test` | **39/39 PASS** | Validation, server actions, download/auth callback, upload, cleanup và liên kết Invite/Recovery mặc định |
+| `pnpm test` | **50/50 PASS** | Validation, server actions, download/auth callback, upload, cleanup, Invite/Recovery và nguồn preview/sandbox/hàng đợi ảnh |
 | `pnpm test:db` | **67/67 PASS** | Migration thực thi trên PGlite/PostgreSQL với Auth/Storage stub |
 | `pnpm build` | PASS | Production build Next.js, các route và Proxy |
-| `pnpm test:e2e` | **3/3 PASS (23/10)** | Edge headless, Next.js thật, HTTP backend fixture; chưa chạy lại browser test sau bản sửa callback mặc định |
+| `pnpm test:e2e` | **4/4 PASS (24/10), 58,2 giây** | Edge headless, Next.js thật, backend fixture; card/filter, upload thumbnail tự động, preview tương tác và mobile |
 | HTTP smoke bản build local (23/10) | PASS | `/` redirect dự án; dự án/playable redirect thiết lập khi thiếu cấu hình; setup/login 200; file API 503 và không cấp file khi chưa cấu hình |
 | Kiểm tra ảnh desktop/mobile | PASS | Xem trực tiếp ảnh 1440px và 390px, không tràn ngang trang; panel mobile toàn màn hình |
 | Migration Supabase cloud | PASS (23/10) | SQL Editor báo thành công, tạo schema/RLS/private buckets từ migration ban đầu |
@@ -21,7 +21,19 @@ Production: [playable-hub-nu.vercel.app](https://playable-hub-nu.vercel.app). So
 | Vercel production ban đầu | PASS | Deployment READY, Node.js 24.x, trang đăng nhập đã được mở và kiểm tra thực tế |
 | Vercel production sau bản sửa Auth (24/10) | PASS | Commit `96a65c9` READY qua Vercel API; `/login` và `/auth/complete` trả 200 với đúng tiêu đề; `/projects` và `/playables` trả 307 tới `/login`; API file trả 401 khi chưa đăng nhập |
 
-`pnpm verify` đã chạy thành công toàn bộ typecheck → lint → unit test → PostgreSQL test → production build sau các chỉnh sửa cuối.
+Các lệnh typecheck, lint, unit test, PostgreSQL test, browser test và production build đã chạy thành công. Build có route mới `/api/preview/[id]`; không cần thay đổi migration.
+
+### Gallery, loading và preview HTML
+
+- Gallery có card lớn, bộ lọc nâng cao thu gọn, không còn các dòng mô tả lặp lại. Đã xem lại ảnh desktop/mobile sau sửa cuối; ba card và footer đầu tiên vừa khung 1440 × 960, mobile không tràn ngang.
+- Route có shimmer theo bố cục đích; link và tìm kiếm có phản hồi pending. Browser test trì hoãn RPC có chủ đích để kiểm tra trạng thái đang tìm và nút submit bị khóa.
+- Ảnh bìa từ HTML là raster thật: test kiểm tra nhiều màu, độ phủ alpha trên 95% và pixel biên không trong suốt với creative fixture. Đã sửa dải trống do stylesheet `svg` của HTML tác động SVG renderer.
+- Preview dùng sandbox chỉ `allow-scripts`, nguồn cách ly và iframe native để bấm đúng vị trí. Test click bằng locator thông thường, xác nhận nội dung thay đổi, kiểm tra dọc/mobile và đóng bằng Escape. Iframe capture được gỡ sau khi chụp; iframe player được gỡ khi đóng.
+- Upload HTML lưu cả file build và thumbnail vào fixture Storage. Khi database báo lỗi, cả hai object mới được dọn và form giữ dữ liệu; lần thử lại thành công. File tải về giữ nguyên nội dung byte.
+- Toàn bộ tải HTML và tạo ảnh gallery chạy tuần tự, hủy khi ra khỏi viewport, tạm dừng khi mở editor/player. Ảnh cache chỉ nằm trong RAM, có giới hạn. Người dùng có thể bỏ qua tạo ảnh khi upload chậm.
+- `vercel.json` đặt Functions tại `syd1`; metadata deployment trước thay đổi xác nhận `iad1`. DNS database nằm trong prefix AWS Sydney. Chưa có số đo thời gian trước/sau bằng phiên thành viên thật, nên không công bố mức giảm độ trễ hay FPS.
+
+Preview/ảnh tự động được xác minh trong ứng dụng Next thật với Storage fixture. Chưa kiểm tra file riêng của thành viên trên Supabase cloud; URL ngoài có thể bị website nguồn chặn iframe, ZIP vẫn tải xuống.
 
 ### Bản sửa liên kết email mặc định
 
@@ -32,6 +44,7 @@ Supabase Free hiện không cho tùy chỉnh email khi chưa có SMTP riêng. Đ
 1. Người chưa đăng nhập bị chuyển sang đăng nhập; đăng nhập, tạo dự án, sửa owner/trạng thái, reload giữ dữ liệu; trang dùng được ở mobile; đăng xuất rồi truy cập lại bị chặn.
 2. Phân trang 12 + 2 bản ghi; tạo playable bằng URL, kết hợp từ khóa/win/network qua URL, mở panel, sửa notes/win và reload; URL nguồn bị khóa; đóng panel giữ bộ lọc; lưu trữ có xác nhận và khôi phục.
 3. Upload HTML trực tiếp, giả lập database lưu lỗi, giữ nội dung form và dọn object mới; thử lại thành công; tải file về có cùng tên và nội dung byte với file đã upload.
+4. Nguồn preview chặn người chưa đăng nhập; ảnh HTML đầy đủ, không trắng; thumbnail được lưu; xem trực tiếp có tương tác, sandbox không dùng chung origin; đóng trình xem dọn iframe và mobile không tràn.
 
 Fixture chỉ nằm trong `tests/e2e/supabase-fixture.mjs`; ứng dụng production không import hoặc tự sử dụng nó. Đây là kiểm tra hành vi ứng dụng với backend mô phỏng, **không phải** kiểm tra tích hợp Supabase cloud.
 
@@ -39,6 +52,9 @@ Fixture chỉ nằm trong `tests/e2e/supabase-fixture.mjs`; ứng dụng product
 
 - [Kho playable desktop](artifacts/qa/desktop.png)
 - [Panel mobile](artifacts/qa/mobile.png)
+- [Gallery mobile](artifacts/qa/gallery-mobile.png)
+- [Preview desktop](artifacts/qa/live-preview.png)
+- [Preview mobile](artifacts/qa/live-preview-mobile.png)
 
 ### Các invariant database đã xác minh
 

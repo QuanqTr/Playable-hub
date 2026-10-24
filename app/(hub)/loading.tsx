@@ -1,1 +1,2 @@
-export default function Loading() { return <div role="status" aria-label="Đang tải dữ liệu"><div className="skeleton h-8 w-44 mb-4" /><div className="skeleton h-4 w-72 max-w-full mb-9" /><div className="library-surface p-6 space-y-6"><div className="skeleton h-10 w-full" />{[1,2,3,4,5,6].map(i => <div key={i} className="skeleton h-14 w-full" />)}</div><span className="sr-only">Đang tải dữ liệu…</span></div>; }
+import { PageSkeleton } from "@/components/page-skeleton";
+export default function Loading() { return <PageSkeleton />; }

@@ -1,20 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ArrowUpRight, CalendarDays, Download, ExternalLink, FileArchive, ImageIcon, UserRound, X } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Download, ExternalLink, FileArchive, UserRound, X } from "lucide-react";
 import type { Lookups, Playable } from "@/lib/types";
 import { formatBytes, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PlayableForm } from "@/components/playable-form";
 import { ArchiveButton } from "@/components/archive-button";
 import { ProjectBadge, WinBadge } from "@/components/status-badge";
+import { PlayableCover } from "@/components/playable-cover";
 
 export function PlayablePanel({ playable, lookups, closeHref }: { playable: Playable; lookups: Lookups; closeHref: string }) {
   const router = useRouter();
-  const [imageError, setImageError] = useState(false);
   const isArchived = !!playable.archived_at;
   const hasSource = !!playable.storage_path || !!playable.external_url;
   const close = () => router.push(closeHref, { scroll: false });
@@ -25,19 +24,13 @@ export function PlayablePanel({ playable, lookups, closeHref }: { playable: Play
       <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[2px]" />
       <Dialog.Content className="fixed inset-y-0 right-0 z-50 flex h-dvh w-full max-w-2xl flex-col border-l border-slate-200 bg-white shadow-2xl focus:outline-none" onCloseAutoFocus={event => event.preventDefault()}>
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 sm:px-7">
-          <div className="min-w-0"><p className="mb-1 font-mono text-xs font-medium tracking-wide text-primary">{playable.code}</p><Dialog.Title className="text-xl font-semibold leading-7 tracking-tight text-slate-900 break-words">{playable.name}</Dialog.Title><Dialog.Description className="mt-1 text-sm text-slate-500">Thông tin build đã triển khai</Dialog.Description></div>
+          <div className="min-w-0"><p className="mb-1 font-mono text-xs font-medium tracking-wide text-primary">{playable.code}</p><Dialog.Title className="text-xl font-semibold leading-7 tracking-tight text-slate-900 break-words">{playable.name}</Dialog.Title><Dialog.Description className="sr-only">Chi tiết và xem trực tiếp playable</Dialog.Description></div>
           <Link href={closeHref} scroll={false} className="flex size-9 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-primary" aria-label="Đóng chi tiết playable"><X size={20} /></Link>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-7 space-y-6">
           {isArchived && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Playable này đã được lưu trữ.</div>}
           {playable.project.archived_at && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Dự án đã được lưu trữ. Khôi phục dự án để hiển thị playable trong kho.</div>}
-          <div className="flex aspect-video items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-            {playable.thumbnail_path && !imageError
-              // Private thumbnail URL is signed only after checking the server session.
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={`/api/files/${playable.id}?thumbnail=true`} alt={`Thumbnail ${playable.name}`} className="h-full w-full object-contain" onError={() => setImageError(true)} />
-              : <div className="flex flex-col items-center gap-2 text-slate-400"><ImageIcon size={32} strokeWidth={1.4} /><span className="text-sm">{imageError ? "Không tải được thumbnail" : "Chưa có thumbnail"}</span></div>}
-          </div>
+          <div className="panel-preview overflow-hidden rounded-xl border border-slate-200"><PlayableCover playable={playable} /></div>
           <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
             <div className="sm:col-span-2"><dt className="mb-1 text-xs font-medium text-slate-500">Dự án</dt><dd><Link href={projectHref} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">{playable.project.name}<ArrowUpRight size={14} /></Link></dd></div>
             <div><dt className="mb-2 text-xs font-medium text-slate-500">Mức độ win</dt><dd><WinBadge value={playable.win_level} /></dd></div>

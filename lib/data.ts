@@ -42,6 +42,21 @@ function readableDataError(error: { message?: string } | null, fallback: string)
   if (error) throw new Error(fallback);
 }
 
+// React.cache lasts for one server render only. A primitive key also deduplicates
+// equivalent filter objects created independently by a page and its panels.
+function filterCacheKey(filters: Filters) {
+  return JSON.stringify({
+    q: filters.q?.trim().slice(0, 200) || undefined,
+    project: filters.project || undefined,
+    status: filters.status || undefined,
+    owner: filters.owner || undefined,
+    win: filters.win || undefined,
+    network: filters.network || undefined,
+    archived: filters.archived === "true" ? "true" : undefined,
+    page: String(pageNumber(filters.page)),
+  });
+}
+
 const projectSelect = "*,owner:profiles!projects_owner_id_fkey(id,display_name,email),playables(count)";
 
 function mapProject(row: Record<string, unknown>): Project {
@@ -66,7 +81,12 @@ export const getLookups = cache(async (): Promise<Lookups> => {
   } as Lookups;
 });
 
-export async function getProjects(filters: Filters = {}): Promise<PageResult<Project>> {
+export function getProjects(filters: Filters = {}): Promise<PageResult<Project>> {
+  return getProjectsForRequest(filterCacheKey(filters));
+}
+
+const getProjectsForRequest = cache(async (key: string): Promise<PageResult<Project>> => {
+  const filters = JSON.parse(key) as Filters;
   const { supabase } = await requireUser();
   const page = pageNumber(filters.page);
   if (filters.owner && !isUuid(filters.owner)) return { items: [], total: 0, page, pageSize: PAGE_SIZE };
@@ -85,18 +105,24 @@ export async function getProjects(filters: Filters = {}): Promise<PageResult<Pro
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
   readableDataError(error, "Không tải được dự án. Vui lòng thử lại.");
   return { items: (data ?? []).map(row => mapProject(row)), total: count ?? 0, page, pageSize: PAGE_SIZE };
-}
+});
 
-export async function getProject(id: string): Promise<Project | null> {
+export const getProject = cache(async (id: string): Promise<Project | null> => {
   const { supabase } = await requireUser();
+  if (!isUuid(id)) return null;
   const { data, error } = await supabase.from("projects").select(projectSelect)
     .eq("id", id).is("playables.archived_at", null).maybeSingle();
   if (error?.code === "22P02") return null;
   readableDataError(error, "Không tải được dự án. Vui lòng thử lại.");
   return data ? mapProject(data) : null;
+});
+
+export function getPlayables(filters: Filters = {}): Promise<PageResult<Playable>> {
+  return getPlayablesForRequest(filterCacheKey(filters));
 }
 
-export async function getPlayables(filters: Filters = {}): Promise<PageResult<Playable>> {
+const getPlayablesForRequest = cache(async (key: string): Promise<PageResult<Playable>> => {
+  const filters = JSON.parse(key) as Filters;
   const { supabase } = await requireUser();
   const page = pageNumber(filters.page);
   if ((filters.owner && !isUuid(filters.owner)) || (filters.project && !isUuid(filters.project))) {
@@ -112,10 +138,11 @@ export async function getPlayables(filters: Filters = {}): Promise<PageResult<Pl
   readableDataError(error, "Không tải được kho playable. Vui lòng thử lại.");
   if (!data || !Array.isArray(data.items)) throw new Error("Dữ liệu kho playable chưa sẵn sàng. Kiểm tra migration Supabase.");
   return data as PageResult<Playable>;
-}
+});
 
-export async function getPlayable(id: string): Promise<Playable | null> {
+export const getPlayable = cache(async (id: string): Promise<Playable | null> => {
   const { supabase } = await requireUser();
+  if (!isUuid(id)) return null;
   const { data, error } = await supabase.from("playables")
     .select("*,project:projects!playables_project_id_fkey(id,name,status,archived_at,owner:profiles!projects_owner_id_fkey(id,display_name,email)),network_links:playable_networks(network:networks(id,name)),creator:profiles!playables_created_by_fkey(id,display_name,email),updater:profiles!playables_updated_by_fkey(id,display_name,email)")
     .eq("id", id).maybeSingle();
@@ -124,4 +151,4 @@ export async function getPlayable(id: string): Promise<Playable | null> {
   if (!data) return null;
   const { network_links, ...playable } = data;
   return { ...playable, networks: network_links.map((link: { network: Network }) => link.network) } as unknown as Playable;
-}
+});

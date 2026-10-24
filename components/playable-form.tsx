@@ -8,6 +8,7 @@ import { savePlayable } from "@/lib/actions";
 import { WIN_LEVELS } from "@/lib/constants";
 import { playableSchema, validateUpload } from "@/lib/validation";
 import { removeUploadedAssets, uploadAsset, uploadMime, type UploadedAsset } from "@/lib/upload";
+import { beginPreviewPlayback, captureHtmlThumbnail } from "@/lib/preview-client";
 import { formatBytes } from "@/lib/utils";
 import type { Lookups, Playable, WinLevel } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -40,10 +41,38 @@ export function PlayableForm({ lookups, playable, projectId, duplicate = false, 
   const [networks, setNetworks] = useState<string[]>(playable?.networks.map(network => network.id) ?? []);
   const [file, setFile] = useState<File | null>(null);
   const [thumbnail, setThumbnail] = useState<File | null>(null);
+  const [automaticThumbnail, setAutomaticThumbnail] = useState<File | null>(null);
+  const [creatingThumbnail, setCreatingThumbnail] = useState(false);
+  const [skipAutomaticThumbnail, setSkipAutomaticThumbnail] = useState(false);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [removeThumbnail, setRemoveThumbnail] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<{ label: string; percent: number } | null>(null);
+  const chosenThumbnail = thumbnail || automaticThumbnail;
+  // An open editor takes priority over background gallery screenshots.
+  useEffect(() => { if (open) return beginPreviewPlayback(); }, [open]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const task = window.setTimeout(async () => {
+      setAutomaticThumbnail(null); setCreatingThumbnail(false); setThumbnailFailed(false);
+      if (!open || edit || thumbnail || skipAutomaticThumbnail || !file || !/\.html?$/i.test(file.name) || validateUpload(file)) return;
+      setCreatingThumbnail(true);
+      try {
+        const image = await captureHtmlThumbnail(await file.text(), { signal: controller.signal });
+        if (!controller.signal.aborted) { setAutomaticThumbnail(image); setThumbnailFailed(!image); }
+      } catch { if (!controller.signal.aborted) setThumbnailFailed(true); }
+      finally { if (!controller.signal.aborted) setCreatingThumbnail(false); }
+    }, 0);
+    return () => { window.clearTimeout(task); controller.abort(); };
+  }, [file, thumbnail, edit, open, skipAutomaticThumbnail]);
+  useEffect(() => {
+    if (!chosenThumbnail) return;
+    const url = URL.createObjectURL(chosenThumbnail);
+    queueMicrotask(() => setThumbnailPreview(url));
+    return () => URL.revokeObjectURL(url);
+  }, [chosenThumbnail]);
   useEffect(() => {
     if (!pending && Object.values(errors).some(Boolean)) form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
   }, [errors, pending]);
@@ -54,7 +83,7 @@ export function PlayableForm({ lookups, playable, projectId, duplicate = false, 
 
   function selectFile(nextFile: File | null, isThumbnail: boolean) {
     if (isThumbnail) { setThumbnail(nextFile); setRemoveThumbnail(false); }
-    else setFile(nextFile);
+    else { setFile(nextFile); setSkipAutomaticThumbnail(false); }
     const field = isThumbnail ? "thumbnail_path" : "storage_path";
     setErrors(previous => ({ ...previous, [field]: nextFile ? validateUpload(nextFile, isThumbnail) ?? "" : "" }));
   }
@@ -65,7 +94,7 @@ export function PlayableForm({ lookups, playable, projectId, duplicate = false, 
     setWin("unreviewed"); setExternalUrl(""); setReleasedAt("");
     setNotes(duplicate ? playable?.notes ?? "" : "");
     setNetworks(duplicate ? playable?.networks.map(network => network.id) ?? [] : []);
-    setFile(null); setThumbnail(null); setRemoveThumbnail(false);
+    setFile(null); setThumbnail(null); setRemoveThumbnail(false); setSkipAutomaticThumbnail(false);
     if (fileInput.current) fileInput.current.value = "";
     if (thumbInput.current) thumbInput.current.value = "";
   }
@@ -88,7 +117,7 @@ export function PlayableForm({ lookups, playable, projectId, duplicate = false, 
       file_name: edit ? playable.file_name : file?.name ?? null,
       file_size: edit ? playable.file_size : file?.size ?? null,
       file_mime: edit ? playable.file_mime : file ? uploadMime(file) : null,
-      thumbnail_path: thumbnail ? placeholderPath : edit && !removeThumbnail ? playable.thumbnail_path : null,
+      thumbnail_path: chosenThumbnail ? placeholderPath : edit && !removeThumbnail ? playable.thumbnail_path : null,
       released_at: releasedAt, notes, network_ids: networks,
     };
     const parsed = playableSchema.safeParse(input);
@@ -109,9 +138,9 @@ export function PlayableForm({ lookups, playable, projectId, duplicate = false, 
         data.storage_path = asset.path; data.file_name = asset.file_name;
         data.file_size = asset.file_size; data.file_mime = asset.file_mime as "text/html" | "application/zip";
       }
-      if (thumbnail) {
+      if (chosenThumbnail) {
         uploadField = "thumbnail_path";
-        const asset = await uploadAsset(thumbnail, true, percent => setProgress({ label: "Đang tải thumbnail", percent }));
+        const asset = await uploadAsset(chosenThumbnail, true, percent => setProgress({ label: "Đang tải ảnh bìa", percent }));
         uploaded.push(asset); data.thumbnail_path = asset.path;
       }
       uploadField = "";
@@ -145,7 +174,7 @@ export function PlayableForm({ lookups, playable, projectId, duplicate = false, 
   return <Dialog open={open} onOpenChange={next => { if (!pending) setOpen(next); }}>
     <DialogTrigger asChild><Button variant={edit || duplicate ? "outline" : "default"}>{edit ? <Pencil size={16} /> : duplicate ? <Copy size={16} /> : <Plus size={17} />}{title}</Button></DialogTrigger>
     <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-2xl">
-      <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{edit ? "Cập nhật thông tin và đánh giá tổng thể của build. Tạo bản ghi mới nếu thay đổi file hoặc URL." : duplicate ? "Thông tin được sao chép. Thêm file hoặc URL cho build mới; mã playable sẽ được tạo tự động." : "Lưu một build đã triển khai. Mã playable sẽ được tạo tự động."}</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{edit ? "Cập nhật thông tin và mức Win." : duplicate ? "Thêm file hoặc URL cho build mới." : "Chọn dự án và thêm nội dung playable."}</DialogDescription></DialogHeader>
       <form ref={form} noValidate onSubmit={submit} className="space-y-5">
         <fieldset disabled={pending} className="space-y-4">
           <div className="field"><Label htmlFor={`${id}-name`}>Tên playable <span aria-hidden="true">*</span></Label><Input id={`${id}-name`} value={name} onChange={event => setName(event.target.value)} placeholder="Ví dụ: Sort mechanic – US – v03" maxLength={160} required {...fieldProps("name")} />{fieldError("name")}</div>
@@ -156,14 +185,21 @@ export function PlayableForm({ lookups, playable, projectId, duplicate = false, 
           <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-4">
             <div className="field"><Label htmlFor={`${id}-file`} className="flex items-center gap-2"><FileArchive size={16} />File build HTML / ZIP</Label>
               {edit ? <div className="rounded-md border bg-white px-3 py-2 text-sm text-slate-600">{playable.file_name ? `${playable.file_name} · ${formatBytes(playable.file_size)}` : "Build này sử dụng URL lưu trữ."}</div> : <Input ref={fileInput} id={`${id}-file`} type="file" accept=".html,.zip,text/html,application/zip,application/x-zip-compressed" onChange={event => selectFile(event.target.files?.[0] ?? null, false)} {...fieldProps("storage_path")} />}
-              {!edit && file && <p className="text-xs text-slate-600">Đã chọn: {file.name} · {formatBytes(file.size)}</p>}<p className="text-xs text-slate-500">{edit ? "File và URL của build đã lưu được giữ nguyên." : "Tối đa 50 MB theo cấu hình kho. Không giải nén hoặc chạy nội dung trong ứng dụng."}</p>{fieldError("storage_path")}{fieldError("file_name")}{fieldError("file_size")}{fieldError("file_mime")}
+              {!edit && file && <p className="text-xs text-slate-600">{file.name} · {formatBytes(file.size)}</p>}<p className="text-xs text-slate-500">{edit ? "Tạo bản sao nếu thay đổi build." : "Tối đa 50 MB · HTML hỗ trợ xem trực tiếp."}</p>{fieldError("storage_path")}{fieldError("file_name")}{fieldError("file_size")}{fieldError("file_mime")}
             </div>
             <div className="field"><Label htmlFor={`${id}-url`}>URL lưu trữ</Label><Input id={`${id}-url`} type="url" value={externalUrl} onChange={event => setExternalUrl(event.target.value)} disabled={edit} placeholder={edit ? "Không có URL" : "https://…"} maxLength={2048} {...fieldProps("external_url")} />{fieldError("external_url")}{!edit && <p className="text-xs text-slate-500">Cần ít nhất một file hoặc URL http/https.</p>}</div>
           </div>
           <div className="field"><Label htmlFor={`${id}-thumbnail`} className="flex items-center gap-2"><ImagePlus size={16} />Thumbnail</Label>
+            {creatingThumbnail && <div role="status" className="flex items-center gap-2 text-xs text-primary"><Loader2 size={14} className="animate-spin" /><span>Đang lấy ảnh từ HTML…</span><button type="button" className="ml-auto underline underline-offset-2" onClick={() => { setSkipAutomaticThumbnail(true); setCreatingThumbnail(false); }}>Bỏ qua</button></div>}
+            {chosenThumbnail && thumbnailPreview && <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-2">
+              {/* This local object URL never leaves the authenticated browser. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={thumbnailPreview} alt="Ảnh bìa đã chọn" className="h-20 w-14 rounded-md object-cover" /><span className="text-xs text-slate-600">{thumbnail ? thumbnail.name : "Ảnh từ preview HTML"}</span>
+            </div>}
+            {thumbnailFailed && !thumbnail && <p className="text-xs text-slate-500">Chưa lấy được ảnh tự động. Bạn có thể chọn ảnh bên dưới.</p>}
             {edit && playable.thumbnail_path && !removeThumbnail && !thumbnail && <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"><span>Đã có thumbnail</span><Button type="button" variant="ghost" size="sm" onClick={() => setRemoveThumbnail(true)}><X size={14} />Gỡ ảnh</Button></div>}
             {removeThumbnail && <p className="text-xs text-slate-500">Thumbnail sẽ được gỡ khi lưu. <button type="button" className="underline" onClick={() => setRemoveThumbnail(false)}>Hoàn tác</button></p>}
-            <Input ref={thumbInput} id={`${id}-thumbnail`} type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" onChange={event => selectFile(event.target.files?.[0] ?? null, true)} {...fieldProps("thumbnail_path")} />{thumbnail && <p className="text-xs text-slate-600">Đã chọn: {thumbnail.name} · {formatBytes(thumbnail.size)}</p>}<p className="text-xs text-slate-500">PNG, JPG hoặc WebP · tối đa 5 MB.</p>{fieldError("thumbnail_path")}
+            <Input ref={thumbInput} id={`${id}-thumbnail`} type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" onChange={event => selectFile(event.target.files?.[0] ?? null, true)} {...fieldProps("thumbnail_path")} /><p className="text-xs text-slate-500">Tự lấy từ HTML hoặc chọn PNG, JPG, WebP · tối đa 5 MB.</p>{fieldError("thumbnail_path")}
           </div>
           <fieldset className="field"><legend className="mb-2 text-sm font-medium">Network đã triển khai</legend><div className="flex flex-wrap gap-2">{lookups.networks.map(network => <label key={network.id} className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-emerald-600" checked={networks.includes(network.id)} onChange={event => setNetworks(previous => event.target.checked ? [...previous, network.id] : previous.filter(value => value !== network.id))} />{network.name}</label>)}</div>{fieldError("network_ids")}</fieldset>
           <div className="field"><Label htmlFor={`${id}-released`}>Ngày triển khai</Label><Input id={`${id}-released`} type="date" value={releasedAt} onChange={event => setReleasedAt(event.target.value)} {...fieldProps("released_at")} />{fieldError("released_at")}</div>
@@ -171,7 +207,7 @@ export function PlayableForm({ lookups, playable, projectId, duplicate = false, 
         </fieldset>
         {progress && <div className="space-y-2" role="status" aria-live="polite"><div className="flex justify-between text-sm text-slate-600"><span className="flex items-center gap-2"><Upload size={14} />{progress.label}…</span><span>{progress.percent}%</span></div><progress className="h-2 w-full accent-emerald-600" value={progress.percent} max={100} aria-label={progress.label} /></div>}
         {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-        <DialogFooter><Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>Hủy</Button><Button type="submit" disabled={pending || !projects.length}>{pending && <Loader2 size={16} className="animate-spin" />}{pending ? progress ? "Đang tải lên…" : "Đang lưu…" : edit ? "Lưu thay đổi" : "Lưu playable"}</Button></DialogFooter>
+        <DialogFooter><Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>Hủy</Button><Button type="submit" disabled={pending || creatingThumbnail || !projects.length}>{(pending || creatingThumbnail) && <Loader2 size={16} className="animate-spin" />}{creatingThumbnail ? "Đang tạo ảnh…" : pending ? progress ? "Đang tải lên…" : "Đang lưu…" : edit ? "Lưu thay đổi" : "Lưu playable"}</Button></DialogFooter>
         {!projects.length && <p className="field-error">Tạo hoặc khôi phục dự án trước khi thêm playable.</p>}
       </form>
     </DialogContent>

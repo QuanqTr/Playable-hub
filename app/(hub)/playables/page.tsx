@@ -13,5 +13,5 @@ export default async function PlayablesPage({ searchParams }: { searchParams: Pr
   const id = selectedPlayable(params);
   const [result, lookups, playable] = await Promise.all([getPlayables(filters), getLookups(), id ? getPlayable(id) : null]);
   if (id && !playable) notFound();
-  return <><div className="page-heading"><div><h1>Kho playable</h1><p className="page-description">Tất cả playable đã triển khai. Dễ tìm kiếm, theo dõi và chia sẻ.</p></div><PlayableForm lookups={lookups} /></div><PlayableList result={result} lookups={lookups} filters={filters} path="/playables" /><p className="text-[10px] text-[#9ca6b0] mt-5">Mỗi bản ghi là một build đã triển khai. Mức độ win do thành viên đánh giá.</p>{playable && <PlayablePanel key={playable.id} playable={playable} lookups={lookups} closeHref={queryHref("/playables", { ...filters }, { playable: null })} />}</>;
+  return <><div className="page-heading"><div><h1>Kho playable</h1></div><PlayableForm lookups={lookups} /></div><PlayableList result={result} lookups={lookups} filters={filters} path="/playables" />{playable && <PlayablePanel key={playable.id} playable={playable} lookups={lookups} closeHref={queryHref("/playables", { ...filters }, { playable: null })} />}</>;
 }

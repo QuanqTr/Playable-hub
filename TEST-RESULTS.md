@@ -13,7 +13,7 @@ Production: [playable-hub-nu.vercel.app](https://playable-hub-nu.vercel.app). So
 | `pnpm test` | **50/50 PASS** | Validation, server actions, download/auth callback, upload, cleanup, Invite/Recovery và nguồn preview/sandbox/hàng đợi ảnh |
 | `pnpm test:db` | **67/67 PASS** | Migration thực thi trên PGlite/PostgreSQL với Auth/Storage stub |
 | `pnpm build` | PASS | Production build Next.js, các route và Proxy |
-| `pnpm test:e2e` | **4/4 PASS (24/10), 58,2 giây** | Edge headless, Next.js thật, backend fixture; card/filter, upload thumbnail tự động, preview tương tác và mobile |
+| `pnpm test:e2e` | **4/4 PASS (24/10), khoảng 1 phút** | Edge headless, Next.js thật, backend fixture; card/filter, upload thumbnail tự động, 7 viewport thiết bị, preview tương tác và mobile |
 | HTTP smoke bản build local (23/10) | PASS | `/` redirect dự án; dự án/playable redirect thiết lập khi thiếu cấu hình; setup/login 200; file API 503 và không cấp file khi chưa cấu hình |
 | Kiểm tra ảnh desktop/mobile | PASS | Xem trực tiếp ảnh 1440px và 390px, không tràn ngang trang; panel mobile toàn màn hình |
 | Migration Supabase cloud | PASS (23/10) | SQL Editor báo thành công, tạo schema/RLS/private buckets từ migration ban đầu |
@@ -28,12 +28,19 @@ Các lệnh typecheck, lint, unit test, PostgreSQL test, browser test và produc
 - Gallery có card lớn, bộ lọc nâng cao thu gọn, không còn các dòng mô tả lặp lại. Đã xem lại ảnh desktop/mobile sau sửa cuối; ba card và footer đầu tiên vừa khung 1440 × 960, mobile không tràn ngang.
 - Route có shimmer theo bố cục đích; link và tìm kiếm có phản hồi pending. Browser test trì hoãn RPC có chủ đích để kiểm tra trạng thái đang tìm và nút submit bị khóa.
 - Ảnh bìa từ HTML là raster thật: test kiểm tra nhiều màu, độ phủ alpha trên 95% và pixel biên không trong suốt với creative fixture. Đã sửa dải trống do stylesheet `svg` của HTML tác động SVG renderer.
-- Preview dùng sandbox chỉ `allow-scripts`, nguồn cách ly và iframe native để bấm đúng vị trí. Test click bằng locator thông thường, xác nhận nội dung thay đổi, kiểm tra dọc/mobile và đóng bằng Escape. Iframe capture được gỡ sau khi chụp; iframe player được gỡ khi đóng.
+- Preview dùng sandbox chỉ `allow-scripts` và nguồn cách ly. Viewport HTML giữ đúng kích thước thiết bị; khung ngoài thu phóng để vừa màn hình. Test dùng thao tác chuột thực tại vị trí hiển thị, kiểm tra `event.isTrusted`, xác nhận nội dung thay đổi, kiểm tra mobile và đóng bằng Escape. Iframe capture được gỡ sau khi chụp; iframe player được gỡ khi đóng.
 - Upload HTML lưu cả file build và thumbnail vào fixture Storage. Khi database báo lỗi, cả hai object mới được dọn và form giữ dữ liệu; lần thử lại thành công. File tải về giữ nguyên nội dung byte.
 - Toàn bộ tải HTML và tạo ảnh gallery chạy tuần tự, hủy khi ra khỏi viewport, tạm dừng khi mở editor/player. Ảnh cache chỉ nằm trong RAM, có giới hạn. Người dùng có thể bỏ qua tạo ảnh khi upload chậm.
 - `vercel.json` đặt Functions tại `syd1`; metadata deployment trước thay đổi xác nhận `iad1`. DNS database nằm trong prefix AWS Sydney. Chưa có số đo thời gian trước/sau bằng phiên thành viên thật, nên không công bố mức giảm độ trễ hay FPS.
 
 Preview/ảnh tự động được xác minh trong ứng dụng Next thật với Storage fixture. Chưa kiểm tra file riêng của thành viên trên Supabase cloud; URL ngoài có thể bị website nguồn chặn iframe, ZIP vẫn tải xuống.
+
+### Cập nhật thiết bị và card (24/10)
+
+- Kiểm tra `window.innerWidth/innerHeight` trong iframe đủ 7 thiết bị theo bảng được cung cấp: 390 × 844, 393 × 852, 430 × 932, 402 × 874, 440 × 956, 360 × 800 và 412 × 915. Xoay Android màn hình lớn sang ngang cho viewport 915 × 412. Khi chuyển màn hình ứng dụng xuống mobile, viewport iPhone vẫn 390 × 844.
+- Mức Win và ghi chú hiển thị ở footer card; Unity Ads có màu tím riêng ở card và panel. Browser test kiểm tra nhãn Win và màu tag thực tế.
+- Nút **Xem dự án** chuyển từ card vào đúng trang dự án và kho playable của dự án đó. Browser test dùng nút này trong luồng tạo/sửa dự án.
+- Chạy lại 50 unit test, TypeScript strict và ESLint đều đạt. Không thay đổi schema hoặc RLS; 67 kiểm tra database ở trên là lượt trước phần thay đổi giao diện này.
 
 ### Bản sửa liên kết email mặc định
 
@@ -55,6 +62,7 @@ Fixture chỉ nằm trong `tests/e2e/supabase-fixture.mjs`; ứng dụng product
 - [Gallery mobile](artifacts/qa/gallery-mobile.png)
 - [Preview desktop](artifacts/qa/live-preview.png)
 - [Preview mobile](artifacts/qa/live-preview-mobile.png)
+- [Card dự án và nút xem dự án](artifacts/qa/project-cards.png)
 
 ### Các invariant database đã xác minh
 

@@ -11,6 +11,7 @@ import { PlayableForm } from "@/components/playable-form";
 import { ArchiveButton } from "@/components/archive-button";
 import { ProjectBadge, WinBadge } from "@/components/status-badge";
 import { PlayableCover } from "@/components/playable-cover";
+import { NetworkTag } from "@/components/network-tag";
 
 export function PlayablePanel({ playable, lookups, closeHref }: { playable: Playable; lookups: Lookups; closeHref: string }) {
   const router = useRouter();
@@ -37,7 +38,7 @@ export function PlayablePanel({ playable, lookups, closeHref }: { playable: Play
             <div><dt className="mb-2 text-xs font-medium text-slate-500">Trạng thái dự án</dt><dd><ProjectBadge value={playable.project.status} /></dd></div>
             <div><dt className="mb-1 text-xs font-medium text-slate-500">Người phụ trách</dt><dd className="flex items-center gap-2 text-sm text-slate-800"><UserRound size={14} className="text-slate-400" />{playable.project.owner.display_name || playable.project.owner.email}</dd></div>
             <div><dt className="mb-1 text-xs font-medium text-slate-500">Ngày triển khai</dt><dd className="flex items-center gap-2 text-sm text-slate-800"><CalendarDays size={14} className="text-slate-400" />{formatDate(playable.released_at)}</dd></div>
-            <div className="sm:col-span-2"><dt className="mb-2 text-xs font-medium text-slate-500">Network đã triển khai</dt><dd className="flex flex-wrap gap-2">{playable.networks.length ? playable.networks.map(network => <span key={network.id} className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600">{network.name}</span>) : <span className="text-sm text-slate-400">Chưa chọn network</span>}</dd></div>
+            <div className="sm:col-span-2"><dt className="mb-2 text-xs font-medium text-slate-500">Network đã triển khai</dt><dd className="flex flex-wrap gap-2">{playable.networks.length ? playable.networks.map(network => <NetworkTag key={network.id} network={network} />) : <span className="text-sm text-slate-400">Chưa chọn network</span>}</dd></div>
           </dl>
           <section className="space-y-3 border-t border-slate-200 pt-5"><h3 className="text-sm font-semibold text-slate-900">File và liên kết</h3>
             {playable.storage_path && <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"><div className="flex min-w-0 items-center gap-3"><FileArchive size={22} className="shrink-0 text-primary" /><div className="min-w-0"><p className="truncate text-sm font-medium text-slate-800">{playable.file_name ?? "File build"}</p><p className="mt-0.5 text-xs text-slate-500">{formatBytes(playable.file_size)} · {playable.file_mime === "text/html" ? "HTML" : "ZIP"}</p></div></div><Button asChild variant="outline" size="sm"><a href={`/api/files/${playable.id}`}><Download size={14} />Tải file</a></Button></div>}

@@ -28,7 +28,11 @@ test("login protection, project creation/edit, logout and mobile layout", async 
   await form.getByLabel("Người phụ trách").selectOption(ownerId);
   await form.getByRole("button", { name: "Tạo dự án", exact: true }).click();
   await expect(form).toBeHidden();
-  await page.getByRole("link", { name: "Dự án E2E", exact: true }).click();
+  const projectCard = page.locator("article.project-card").filter({ has: page.getByRole("link", { name: "Dự án E2E", exact: true }) });
+  await expect(projectCard).toBeVisible();
+  await mkdir("artifacts/qa", { recursive: true });
+  await page.screenshot({ path: "artifacts/qa/project-cards.png" });
+  await projectCard.getByRole("link", { name: "Xem dự án", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Dự án E2E", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).click();
   const edit = page.getByRole("dialog", { name: "Chỉnh sửa dự án", exact: true });
@@ -161,6 +165,11 @@ test("HTML covers become static images and live review plays in an isolated resp
   await page.goto(`/playables?q=${encodeURIComponent(playable.name)}`);
   await expect(page.locator("article.playable-card")).toHaveCount(1);
   const card = page.locator("article.playable-card").filter({ has: page.getByRole("link", { name: playable.name, exact: true }) });
+  await expect(card.locator(".playable-card-win")).toContainText("Mức độ win");
+  await expect(card.locator(".playable-card-win .badge")).toHaveText("Win");
+  await expect(card.locator(".network-unity")).toHaveText("Unity Ads");
+  const unityColor = await card.locator(".network-unity").evaluate(tag => getComputedStyle(tag).backgroundColor);
+  expect(unityColor).toBe("rgb(237, 233, 254)");
   const cover = card.locator("img[data-preview-cover='captured']");
   await expect(cover).toBeVisible();
   expect(await cover.evaluate(image => (image as HTMLImageElement).naturalWidth > 0 && (image as HTMLImageElement).naturalHeight > 0)).toBe(true);
@@ -196,15 +205,53 @@ test("HTML covers become static images and live review plays in an isolated resp
   expect(sandbox.split(/\s+/)).toContain("allow-scripts");
   expect(sandbox.split(/\s+/)).not.toContain("allow-same-origin");
   const creative = page.frameLocator(`iframe[title="Preview ${playable.name}"]`);
+  // The actual game viewport stays at the selected design dimensions even
+  // when its displayed frame is scaled to fit a laptop or mobile screen.
+  const devices = [
+    ["iphone-13-14", 390, 844], ["iphone-15-16", 393, 852],
+    ["iphone-15-pro-max", 430, 932], ["iphone-16-pro", 402, 874],
+    ["iphone-16-pro-max", 440, 956], ["android", 360, 800],
+    ["android-large", 412, 915],
+  ] as const;
+  for (const [id, width, height] of devices) {
+    await player.getByRole("combobox", { name: "Thiết bị preview" }).selectOption(id);
+    await expect.poll(() => creative.locator("html").evaluate(() => [window.innerWidth, window.innerHeight])).toEqual([width, height]);
+    await expect(player.getByLabel("Kích thước preview")).toContainText(`${width} × ${height}`);
+  }
+  await player.getByRole("button", { name: "Chuyển màn hình ngang" }).click();
+  await expect.poll(() => creative.locator("html").evaluate(() => [window.innerWidth, window.innerHeight])).toEqual([915, 412]);
+  await player.getByRole("button", { name: "Chuyển màn hình dọc" }).click();
+  await player.getByRole("combobox", { name: "Thiết bị preview" }).selectOption("iphone-13-14");
   const start = creative.getByRole("button", { name: "Bắt đầu chơi", exact: true });
   await expect(start).toBeVisible();
-  await start.click();
+  // Exercise real pointer input at the displayed coordinates. The iframe keeps
+  // device pixels while the outer frame scales to fit the screen.
+  async function clickPlayableButton(name: string) {
+    const button = creative.getByRole("button", { name, exact: true });
+    await button.evaluate(element => {
+      element.removeAttribute("data-trusted-click");
+      element.addEventListener("click", event => element.setAttribute("data-trusted-click", String(event.isTrusted)), { once: true });
+    });
+    const target = await button.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, width: window.innerWidth, height: window.innerHeight };
+    });
+    const frame = await iframe.boundingBox();
+    expect(frame).not.toBeNull();
+    await page.mouse.click(frame!.x + target.x * frame!.width / target.width, frame!.y + target.y * frame!.height / target.height);
+    await expect(creative.locator("#start")).toHaveAttribute("data-trusted-click", "true");
+  }
+  await clickPlayableButton("Bắt đầu chơi");
   await expect(creative.getByText("Bạn đã bắt đầu!", { exact: true })).toBeVisible();
   await mkdir("artifacts/qa", { recursive: true });
   await page.screenshot({ path: "artifacts/qa/live-preview.png" });
 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await expect.poll(() => creative.locator("html").evaluate(() => [window.innerWidth, window.innerHeight])).toEqual([390, 844]);
+  // Pointer input must still work through the fitted frame on mobile.
+  await clickPlayableButton("Chơi lại");
+  await expect(creative.getByText("Bạn đã bắt đầu!", { exact: true })).toBeVisible();
   await page.screenshot({ path: "artifacts/qa/live-preview-mobile.png" });
   await player.focus();
   await page.keyboard.press("Escape");

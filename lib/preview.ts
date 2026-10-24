@@ -5,6 +5,17 @@ export const MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024;
 export const PREVIEW_WIDTH = 390;
 export const PREVIEW_HEIGHT = 694;
 
+/** Logical viewport sizes supplied in the device design reference. */
+export const PREVIEW_DEVICES = [
+  { id: "iphone-13-14", name: "iPhone 13 / 14", width: 390, height: 844, unit: "pt" },
+  { id: "iphone-15-16", name: "iPhone 15 / 16", width: 393, height: 852, unit: "pt" },
+  { id: "iphone-15-pro-max", name: "iPhone 15 Pro Max", width: 430, height: 932, unit: "pt" },
+  { id: "iphone-16-pro", name: "iPhone 16 Pro", width: 402, height: 874, unit: "pt" },
+  { id: "iphone-16-pro-max", name: "iPhone 16 Pro Max", width: 440, height: 956, unit: "pt" },
+  { id: "android", name: "Android phổ biến", width: 360, height: 800, unit: "dp" },
+  { id: "android-large", name: "Android màn hình lớn", width: 412, height: 915, unit: "dp" },
+] as const;
+
 export type PreviewSource = { kind: "html"; url: string } | { kind: "external"; url: string };
 export interface PreviewPlayable {
   id: string;

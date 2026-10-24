@@ -4,6 +4,8 @@ Kho playable ads nội bộ theo dự án, triển khai theo [document.md](docum
 
 **Ứng dụng dùng dữ liệu thật từ Supabase.** Nếu chưa có biến môi trường, trang `/setup` hướng dẫn thiết lập; không có cơ chế giả lập lưu thành công hoặc tự chèn demo data vào production.
 
+Production: **[playable-hub-nu.vercel.app](https://playable-hub-nu.vercel.app)**. Source: [QuanqTr/Playable-hub](https://github.com/QuanqTr/Playable-hub). Supabase project: `mslinuppummnkdtguqet`.
+
 ## Chạy local
 
 Yêu cầu Node.js 22 trở lên và pnpm 10.32.1. Các phiên bản đã được khóa trong `pnpm-lock.yaml`; TypeScript 5.9 và ESLint 9 được chọn để tương thích với bộ lint của Next.js 16.
@@ -68,11 +70,16 @@ Trong **Authentication → URL Configuration**:
 - Thêm chính xác các redirect URL:
   - `http://127.0.0.1:3000/auth/confirm`
   - `http://127.0.0.1:3000/auth/callback`
+  - `http://127.0.0.1:3000/auth/complete`
   - `http://127.0.0.1:3000/set-password`
 - Nếu chọn `localhost`, thêm các URL cùng đường dẫn với host `localhost`.
 - Production dùng domain HTTPS thực tế. Tránh wildcard rộng cho môi trường production.
 
-Trong **Authentication → Email Templates → Invite user**, thay liên kết xác nhận bằng:
+Ứng dụng hỗ trợ **mẫu email mặc định** của Supabase: liên kết Invite/Recovery đưa về Site URL cùng fragment phiên; trình duyệt chuyển sang `/auth/complete`, xóa fragment khỏi địa chỉ trước khi xác thực, ghi cookie bằng Supabase SSR, xác minh user rồi mở `/set-password`. Chỉ chấp nhận luồng `invite` hoặc `recovery`; không hiển thị hay ghi log token.
+
+Giữ **Site URL là origin** của ứng dụng, ví dụ `https://playable-hub-nu.vercel.app`. Trên project Free mới sử dụng SMTP mặc định, Supabase không cho sửa mẫu email. SMTP mặc định cũng chỉ gửi đến email thành viên của tổ chức Supabase; muốn mời đồng nghiệp ngoài tổ chức cần SMTP riêng. Đây là yêu cầu của dịch vụ, không phải phân quyền trong Playable Hub. [Thay đổi mẫu email trên Free](https://supabase.com/changelog/46599-changes-to-email-template-customisation-on-free-tier), [giới hạn SMTP mặc định](https://supabase.com/docs/guides/auth/auth-smtp).
+
+Nếu đã cấu hình SMTP riêng hoặc có quyền chỉnh sửa template, trong **Authentication → Email Templates → Invite user**, có thể thay liên kết xác nhận bằng:
 
 ```html
 <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=invite&amp;next=/set-password">
@@ -94,7 +101,7 @@ Nếu dùng Supabase CLI local với Docker: chạy `supabase start`, `supabase 
 
 ### 4. Mời thành viên đầu tiên và các thành viên tiếp theo
 
-1. Hoàn tất migration, URL Configuration và mẫu thư mời trước.
+1. Hoàn tất migration và URL Configuration; dùng mẫu mặc định hoặc cấu hình template nếu tài khoản cho phép.
 2. Vào **Authentication → Users → Add user → Invite user**.
 3. Điền email thành viên và gửi lời mời.
 4. Thành viên mở thư mời, đặt mật khẩu rồi đăng nhập.
@@ -129,8 +136,10 @@ pnpm verify
 - `tests/validation.test.ts`: dữ liệu bắt buộc, URL an toàn, file/thumbnail, giới hạn dung lượng, ngày không hợp lệ, network và bảo toàn URL bộ lọc/panel.
 - `tests/server.test.ts`: mock backend để kiểm tra xác thực trước ghi, payload RPC transaction, lỗi database, audit từ phiên, signed download và callback an toàn.
 - `tests/upload.test.ts`: upload trực tiếp, tiến độ theo byte, MIME/header, không overwrite, cleanup sau timeout/mất kết nối và xử lý lỗi cleanup.
+- `tests/auth-redirect.test.ts`: liên kết Invite/Recovery mặc định, token thiếu/sai, xác minh phiên và lỗi callback không lộ token.
 - `tests/database.mjs`: chạy migration trên **PGlite/PostgreSQL thực thi SQL** với schema Auth/Storage stub; kiểm tra RLS, cộng tác, audit, bất biến build, rollback transaction, policy Storage và phân trang. Không thay thế kiểm tra dịch vụ Supabase thật.
 - `supabase/tests/database.test.sql`: pgTAP cho Supabase local/test; xem [hướng dẫn kiểm tra database](supabase/tests/README.md).
+- `node --env-file=.env.local scripts/check-supabase.mjs`: kiểm tra kết nối chỉ đọc bằng public key. Anonymous bị chặn là kết quả đúng; script không thể chứng minh đầy đủ quyền thành viên hoặc schema chỉ bằng phản hồi ẩn danh.
 - `supabase/tests/concurrency.mjs`: 24 request HTTP song song đến Supabase test project, kiểm tra mã duy nhất và phân trang. Cần hai biến public Supabase cùng `SUPABASE_TEST_EMAIL`/`SUPABASE_TEST_PASSWORD` trong `.env.local`; chỉ dùng tài khoản được mời trong project test. Chạy `node --env-file=.env.local supabase/tests/concurrency.mjs`. Script sẽ tạo và lưu trữ dữ liệu kiểm tra.
 - `pnpm test:e2e`: Playwright mở ứng dụng Next thật ở port 3100 với **HTTP fixture Supabase chỉ trong tests** ở port 54329, hoàn toàn tách khỏi dữ liệu production; kiểm tra UI và các hành vi ứng dụng. Không chứng minh Auth/Storage cloud hoạt động. Cấu hình hiện dùng Microsoft Edge đã cài trên Windows (`channel: "msedge"`); trên máy khác có thể đổi channel hoặc cài Chromium bằng `pnpm exec playwright install chromium` và bỏ channel trong `playwright.config.ts`. Để trống hai port kiểm thử trước khi chạy. Ảnh desktop/mobile được lưu vào `artifacts/qa/`.
 
@@ -154,13 +163,13 @@ Kết quả thực thi tại thời điểm bàn giao được ghi trong [TEST-R
 1. Đưa source lên repository của bạn, import project vào Vercel, chọn preset **Next.js** và Node.js 22 hoặc 24. [Node.js được Vercel hỗ trợ](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
 2. Dùng `pnpm install --frozen-lockfile`, build `pnpm build`; output giữ mặc định Next.js. Có thể dùng CLI `vercel` nếu đã cấu hình tài khoản.
 3. Đặt `NEXT_PUBLIC_SUPABASE_URL` và `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ở đúng môi trường Production/Preview, rồi deploy lại sau mỗi thay đổi biến public.
-4. Trong Supabase, đổi Site URL sang `https://your-domain` và thêm `/auth/confirm`, `/auth/callback`, `/set-password` cho domain đó vào allowlist.
-5. Xác nhận mẫu Invite/Reset dùng Site URL production. Nếu dùng Preview, chỉ thêm domain Preview cụ thể cần kiểm tra và tránh làm thư mời production trỏ sai môi trường.
+4. Trong Supabase, đổi Site URL sang `https://your-domain` và thêm `/auth/confirm`, `/auth/callback`, `/auth/complete`, `/set-password` cho domain đó vào allowlist.
+5. Xác nhận mẫu Invite/Reset dùng Site URL production; mẫu mặc định đã được hỗ trợ. Nếu dùng Preview, chỉ thêm domain Preview cụ thể cần kiểm tra và tránh làm thư mời production trỏ sai môi trường.
 6. Mở URL được Vercel cấp, kiểm tra auth/callback, CRUD, upload, download và checklist phía trên.
 
 Không cần worker, queue, backend riêng hay service-role key. File được upload trực tiếp tới Supabase nên không đi qua giới hạn body của Vercel Functions.
 
-Chưa có credentials/deployment URL nghĩa là chỉ **đã chuẩn bị source để deploy**, chưa có xác nhận deploy thành công.
+Project hiện được kết nối với GitHub và deploy tự động từ nhánh `main`. Migration ban đầu đã được áp dụng qua SQL Editor; nếu về sau dùng Supabase CLI `db push`, cần đánh dấu migration `202610230001` đã áp dụng bằng `supabase migration repair --status applied 202610230001` trước, để không chạy lại lệnh tạo bảng.
 
 ## Cấu trúc chính
 

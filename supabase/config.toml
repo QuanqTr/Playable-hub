@@ -31,7 +31,7 @@ file_size_limit = "50MiB"
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:3000"
-additional_redirect_urls = ["http://localhost:3000/auth/callback", "http://localhost:3000/auth/confirm", "http://localhost:3000/set-password", "http://127.0.0.1:3000/auth/callback", "http://127.0.0.1:3000/auth/confirm", "http://127.0.0.1:3000/set-password"]
+additional_redirect_urls = ["http://localhost:3000/auth/callback", "http://localhost:3000/auth/confirm", "http://localhost:3000/auth/complete", "http://localhost:3000/set-password", "http://127.0.0.1:3000/auth/callback", "http://127.0.0.1:3000/auth/confirm", "http://127.0.0.1:3000/auth/complete", "http://127.0.0.1:3000/set-password"]
 jwt_expiry = 3600
 enable_signup = false
 enable_anonymous_sign_ins = false

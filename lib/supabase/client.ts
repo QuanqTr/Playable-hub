@@ -8,6 +8,6 @@ let client: ReturnType<typeof createBrowserClient> | undefined;
 export function createClient() {
   const config = getSupabaseConfig();
   if (!config) throw new Error("Chưa cấu hình kết nối Supabase.");
-  client ??= createBrowserClient(config.url, config.key);
+  client ??= createBrowserClient(config.url, config.key, { auth: { detectSessionInUrl: false } });
   return client;
 }

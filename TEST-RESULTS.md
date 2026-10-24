@@ -1,6 +1,8 @@
 # Kết quả kiểm tra
 
-Ngày: **23/10/2026**, múi giờ Asia/Ho_Chi_Minh. Môi trường thực thi: Windows, Node.js **25.6.1**, pnpm **10.32.1**, Next.js **16.4.2**. Chưa xác minh runtime Node.js 22/24 trên Vercel.
+Lượt kiểm tra mới nhất: **24/10/2026**, múi giờ Asia/Ho_Chi_Minh. Môi trường local: Windows, Node.js **25.6.1**, pnpm **10.32.1**, Next.js **16.4.2**. Project Vercel đã build thành công với preset Next.js và runtime **Node.js 24.x**.
+
+Production: [playable-hub-nu.vercel.app](https://playable-hub-nu.vercel.app). Source: [QuanqTr/Playable-hub](https://github.com/QuanqTr/Playable-hub).
 
 ## Đã chạy thành công
 
@@ -8,14 +10,21 @@ Ngày: **23/10/2026**, múi giờ Asia/Ho_Chi_Minh. Môi trường thực thi: W
 | --- | --- | --- |
 | `pnpm typecheck` | PASS | TypeScript strict, toàn bộ ứng dụng và test |
 | `pnpm lint` | PASS | Không lỗi, không warning ESLint |
-| `pnpm test` | **33/33 PASS** | Validation, server actions, download/auth callback, upload và lỗi cleanup |
+| `pnpm test` | **39/39 PASS** | Validation, server actions, download/auth callback, upload, cleanup và liên kết Invite/Recovery mặc định |
 | `pnpm test:db` | **67/67 PASS** | Migration thực thi trên PGlite/PostgreSQL với Auth/Storage stub |
 | `pnpm build` | PASS | Production build Next.js, các route và Proxy |
-| `pnpm test:e2e` | **3/3 PASS** | Edge headless, Next.js thật, HTTP backend fixture chỉ dùng cho kiểm thử |
+| `pnpm test:e2e` | **3/3 PASS (23/10)** | Edge headless, Next.js thật, HTTP backend fixture; chưa chạy lại browser test sau bản sửa callback mặc định |
 | HTTP smoke production local | PASS | `/` redirect dự án; dự án/playable redirect thiết lập khi thiếu cấu hình; setup/login 200; file API 503 và không cấp file khi chưa cấu hình |
 | Kiểm tra ảnh desktop/mobile | PASS | Xem trực tiếp ảnh 1440px và 390px, không tràn ngang trang; panel mobile toàn màn hình |
+| Migration Supabase cloud | PASS (23/10) | SQL Editor báo thành công, tạo schema/RLS/private buckets từ migration ban đầu |
+| Anonymous API Supabase cloud | PASS (23/10) | 5 bảng và RPC trả 401/42501; public sign-up đã tắt; Storage anonymous chỉ trả danh sách trống |
+| Vercel production ban đầu | PASS | Deployment READY, Node.js 24.x, trang đăng nhập đã được mở và kiểm tra thực tế |
 
 `pnpm verify` đã chạy thành công toàn bộ typecheck → lint → unit test → PostgreSQL test → production build sau các chỉnh sửa cuối.
+
+### Bản sửa liên kết email mặc định
+
+Supabase Free hiện không cho tùy chỉnh email khi chưa có SMTP riêng. Đã bổ sung `/auth/complete` và listener chuyển fragment Invite/Recovery từ Site URL sang route này; xóa token khỏi địa chỉ trước khi gọi Auth, lưu cookie bằng SSR client, xác minh user rồi mới chuyển sang trang tự đặt mật khẩu. Sáu unit test mới kiểm tra dữ liệu thiếu/sai/trùng, loại luồng không được hỗ trợ, thứ tự xác thực và lỗi không lộ token. Code đã được rà soát độc lập; chưa xác nhận luồng email thật trước khi thành viên đầu tiên nhận lời mời.
 
 ### Luồng Playwright đã xác minh
 
@@ -41,18 +50,18 @@ Fixture chỉ nằm trong `tests/e2e/supabase-fixture.mjs`; ứng dụng product
 
 ## Chưa chạy vì thiếu cấu hình/dịch vụ
 
-- Supabase Auth thật: lời mời email, recovery, cookie refresh, vô hiệu hóa sign-up và kiểm tra phiên qua dịch vụ thực tế.
+- Supabase Auth thật: gửi/nhận lời mời, recovery, cookie refresh và kiểm tra phiên thành viên. Public sign-up đã được tắt và kiểm tra qua API; thao tác gửi lời mời đầu tiên chưa hoàn tất vì kết nối trình duyệt bị lỗi.
 - Supabase Storage thật: upload/download blob, MIME/size rejection ở dịch vụ, signed URL thực tế và thời điểm hết hạn.
 - `supabase test db`/pgTAP trên Supabase local hoặc cloud test; chưa có stack Docker/Supabase local được cấu hình.
 - `supabase/tests/concurrency.mjs`: 24 request HTTP song song; cần Supabase test project và tài khoản test được mời. Sequence đã được kiểm tra bằng SQL, nhưng chưa khẳng định đã chạy test HTTP cạnh tranh.
-- Deploy Vercel và kiểm tra URL production: chưa có credentials/project/domain.
+- Kiểm tra CRUD và upload/download bằng tài khoản thật trên production; cần thành viên đầu tiên tự đặt mật khẩu.
 
-## Cấu hình cần điền để chạy thật
+## Trạng thái cấu hình và bước còn lại
 
-1. `NEXT_PUBLIC_SUPABASE_URL` và `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` trong `.env.local`/Vercel.
-2. Chạy SQL migration trên Supabase mới.
-3. Tắt sign-up công khai, cấu hình Site URL/redirect allowlist và mẫu Invite/Recovery trong Dashboard.
-4. Mời thành viên đầu tiên theo README.
-5. Deploy Vercel và thực hiện checklist tích hợp thực tế trong README.
+1. Đã cấu hình hai biến public Supabase trong `.env.local` và Vercel. `.env.local` không được commit.
+2. Đã chạy migration trên project `mslinuppummnkdtguqet` qua SQL Editor.
+3. Đã tắt sign-up, đặt Site URL production và lưu 12 callback URL cụ thể cho production/local. Dùng mẫu email mặc định, không nâng gói hoặc đăng ký dịch vụ SMTP.
+4. Còn gửi lời mời thành viên đầu tiên và để chủ tài khoản tự đặt mật khẩu; không có mật khẩu mới nào được agent tạo.
+5. Sau đó thực hiện checklist Auth/CRUD/Storage thực tế trong README. Mời email ngoài tổ chức Supabase cần SMTP riêng theo giới hạn dịch vụ.
 
-Chưa có URL deployment được xác nhận. Không có secret/service-role key trong source và không có dữ liệu demo tự chèn vào production.
+Không có secret/service-role key trong source và không có dữ liệu demo tự chèn vào production.

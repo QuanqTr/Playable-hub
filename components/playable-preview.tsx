@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode } from "react";
-import { Download, ExternalLink, Monitor, Play, RotateCcw, Smartphone } from "lucide-react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Download, ExternalLink, Maximize, Minimize, Monitor, Play, RotateCcw, Smartphone } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { createPreviewDocument, PREVIEW_DEVICES, PREVIEW_SANDBOX, type PreviewPlayable } from "@/lib/preview";
@@ -22,6 +22,9 @@ function PreviewPlayer({ playable }: { playable: PreviewPlayable }) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [reload, setReload] = useState(0);
   const [landscape, setLandscape] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const dialog = useRef<HTMLDivElement>(null);
+  const fullscreenOwner = useRef<HTMLElement | null>(null);
   const [deviceId, setDeviceId] = useState<string>(PREVIEW_DEVICES[0].id);
   const deviceSelectId = useId();
   const [loaded, setLoaded] = useState(false);
@@ -30,9 +33,41 @@ function PreviewPlayer({ playable }: { playable: PreviewPlayable }) {
   const device = PREVIEW_DEVICES.find(item => item.id === deviceId) ?? PREVIEW_DEVICES[0];
   const width = landscape ? device.height : device.width;
   const height = landscape ? device.width : device.height;
-  const scale = Math.max(0.1, Math.min(1, (available.width - 32) / width, (available.height - 32) / height));
+  const scale = Math.max(0.01, Math.min((available.width - 12) / width, (available.height - 12) / height));
 
   useEffect(() => beginPreviewPlayback(), []);
+
+  useEffect(() => {
+    const changed = () => {
+      if (fullscreenOwner.current && document.fullscreenElement !== fullscreenOwner.current) {
+        fullscreenOwner.current = null;
+        setExpanded(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", changed);
+    return () => {
+      document.removeEventListener("fullscreenchange", changed);
+      if (fullscreenOwner.current && document.fullscreenElement === fullscreenOwner.current) {
+        void document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
+
+  async function toggleExpanded() {
+    if (expanded) {
+      if (document.fullscreenElement === dialog.current) await document.exitFullscreen().catch(() => {});
+      setExpanded(false);
+      return;
+    }
+    setExpanded(true);
+    const element = dialog.current;
+    // The edge-to-edge layout also works when browser fullscreen is unavailable.
+    if (element && document.fullscreenEnabled && element.requestFullscreen) {
+      fullscreenOwner.current = element;
+      try { await element.requestFullscreen(); }
+      catch { fullscreenOwner.current = null; }
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -55,13 +90,14 @@ function PreviewPlayer({ playable }: { playable: PreviewPlayable }) {
   function restart() { setLoaded(false); setState({ status: "loading" }); setReload(value => value + 1); }
   const source = state.status === "ready" ? state.source : null;
 
-  return <DialogContent className="preview-dialog flex h-[min(92dvh,880px)] max-w-[1100px] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[1100px]" aria-describedby="preview-description">
-    <div className="flex min-h-20 shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-white px-5 py-4 pr-14">
-      <div className="min-w-0"><span className="mb-1 block text-[10px] font-bold uppercase tracking-[.18em] text-primary">PLAYABLE PREVIEW</span><DialogTitle className="truncate text-lg" aria-label={`Xem trực tiếp ${playable.name}`}>{playable.name}</DialogTitle></div>
-      <div className="flex items-center gap-1.5">
+  return <DialogContent ref={dialog} data-expanded={expanded} data-landscape={landscape} className="preview-dialog flex flex-col gap-0 overflow-hidden p-0" style={expanded ? { translate: "none" } : undefined} aria-describedby="preview-description" onEscapeKeyDown={event => { if (expanded) { event.preventDefault(); void toggleExpanded(); } }}>
+    <div className="preview-header">
+      <DialogTitle className="min-w-0 flex-1 truncate text-base" aria-label={`Xem trực tiếp ${playable.name}`}>{playable.name}</DialogTitle>
+      <div className="preview-actions">
         <Button variant="ghost" size="icon" aria-label="Chạy lại preview" onClick={restart}><RotateCcw /></Button>
         {playable.storage_path && <Button asChild variant="ghost" size="icon"><a href={`/api/files/${playable.id}`} aria-label="Tải playable"><Download /></a></Button>}
         {playable.external_url && <Button asChild variant="ghost" size="icon"><a href={playable.external_url} target="_blank" rel="noopener noreferrer" aria-label="Mở liên kết gốc"><ExternalLink /></a></Button>}
+        <Button variant="outline" size="sm" className="preview-expand-button" aria-label={expanded ? "Thu nhỏ preview" : "Xem toàn màn hình"} title={expanded ? "Thu nhỏ preview" : "Xem toàn màn hình"} aria-pressed={expanded} onClick={() => void toggleExpanded()}>{expanded ? <Minimize /> : <Maximize />}<span>{expanded ? "Thu nhỏ" : "Xem full"}</span></Button>
       </div>
     </div>
     <div className="preview-device-toolbar">
@@ -69,8 +105,8 @@ function PreviewPlayer({ playable }: { playable: PreviewPlayable }) {
       <select id={deviceSelectId} className="select preview-device-select" value={deviceId} onChange={event => setDeviceId(event.target.value)}>
         {PREVIEW_DEVICES.map(item => <option key={item.id} value={item.id}>{item.name} · {item.width} × {item.height} {item.unit}</option>)}
       </select>
-      <Button variant="outline" size="sm" aria-label={landscape ? "Chuyển màn hình dọc" : "Chuyển màn hình ngang"} aria-pressed={landscape} onClick={() => setLandscape(value => !value)}>{landscape ? <Monitor /> : <Smartphone />}{landscape ? "Ngang" : "Dọc"}</Button>
-      <output className="preview-viewport-size" aria-live="polite" aria-label="Kích thước preview">{width} × {height} {device.unit}</output>
+      <Button variant="outline" size="sm" aria-label={landscape ? "Chuyển màn hình dọc" : "Chuyển màn hình ngang"} aria-pressed={landscape} onClick={() => setLandscape(value => !value)}>{landscape ? <Monitor /> : <Smartphone />}<span className="preview-orientation-label">{landscape ? "Ngang" : "Dọc"}</span></Button>
+      <output className="sr-only" aria-live="polite" aria-label="Kích thước preview">{width} × {height} {device.unit}</output>
     </div>
     <div ref={setStage} className="preview-stage relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-slate-100" style={{ backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)", backgroundSize: "18px 18px" }}>
       {state.status === "loading" && <div className="preview-shimmer relative overflow-hidden rounded-3xl bg-slate-200" role="status" aria-label="Đang tải preview" style={{ width: width * scale, height: height * scale }}><div className="absolute inset-x-6 bottom-8 h-12 rounded-xl bg-white/45" /><span className="sr-only">Đang tải preview…</span></div>}
@@ -82,6 +118,6 @@ function PreviewPlayer({ playable }: { playable: PreviewPlayable }) {
         </div>
       </div>}
     </div>
-    <DialogDescription id="preview-description" className="shrink-0 border-t bg-white px-5 py-3 text-center text-xs leading-5">{source?.kind === "external" ? <>Nếu trang không hiển thị, <a className="font-medium text-primary underline underline-offset-2" href={source.url} target="_blank" rel="noopener noreferrer">mở liên kết gốc</a>.</> : "Chạm hoặc nhấp vào màn hình để trải nghiệm."}</DialogDescription>
+    <DialogDescription id="preview-description" className="sr-only">Chọn thiết bị, xoay khung hoặc xem toàn màn hình. Nhấp hoặc chạm vào playable để trải nghiệm. Liên kết ngoài có thể được mở bằng nút Mở liên kết gốc.</DialogDescription>
   </DialogContent>;
 }

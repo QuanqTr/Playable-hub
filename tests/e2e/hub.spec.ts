@@ -243,16 +243,53 @@ test("HTML covers become static images and live review plays in an isolated resp
   }
   await clickPlayableButton("Bắt đầu chơi");
   await expect(creative.getByText("Bạn đã bắt đầu!", { exact: true })).toBeVisible();
+  expect((await player.locator(".preview-header").boundingBox())!.height).toBeLessThanOrEqual(56);
+  expect((await player.boundingBox())!.width).toBeLessThan(650);
+  expect((await iframe.boundingBox())!.height).toBeGreaterThan(1080 * 0.82);
   await mkdir("artifacts/qa", { recursive: true });
   await page.screenshot({ path: "artifacts/qa/live-preview.png" });
+
+  await player.getByRole("button", { name: "Xem toàn màn hình", exact: true }).click();
+  await expect(player).toHaveAttribute("data-expanded", "true");
+  await expect.poll(() => player.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return Math.abs(rect.width - innerWidth) < 2 && Math.abs(rect.height - innerHeight) < 2 && Math.abs(rect.x) < 1 && Math.abs(rect.y) < 1;
+  })).toBe(true);
+  await expect.poll(() => creative.locator("html").evaluate(() => [innerWidth, innerHeight])).toEqual([390, 844]);
+  expect((await iframe.boundingBox())!.height).toBeGreaterThan(1080 * 0.95);
+  await expect(creative.getByText("Bạn đã bắt đầu!", { exact: true })).toBeVisible();
+  await clickPlayableButton("Chơi lại");
+  await page.screenshot({ path: "artifacts/qa/live-preview-fullscreen.png" });
+  await player.focus();
+  await page.keyboard.press("Escape");
+  await expect(player).toHaveAttribute("data-expanded", "false");
+  await expect(player).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+
+  // Verify the viewport-filling fallback when native fullscreen is unavailable.
+  await page.evaluate(() => Object.defineProperty(document, "fullscreenEnabled", { configurable: true, value: false }));
+  await player.getByRole("button", { name: "Xem toàn màn hình", exact: true }).click();
+  await expect(player).toHaveAttribute("data-expanded", "true");
+  await expect.poll(() => player.evaluate(element => Math.abs(element.getBoundingClientRect().height - innerHeight) < 2)).toBe(true);
+  await player.getByRole("button", { name: "Thu nhỏ preview", exact: true }).click();
+  await expect(player).toHaveAttribute("data-expanded", "false");
 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   await expect.poll(() => creative.locator("html").evaluate(() => [window.innerWidth, window.innerHeight])).toEqual([390, 844]);
+  expect((await iframe.boundingBox())!.height).toBeGreaterThan(844 * 0.8);
   // Pointer input must still work through the fitted frame on mobile.
   await clickPlayableButton("Chơi lại");
   await expect(creative.getByText("Bạn đã bắt đầu!", { exact: true })).toBeVisible();
   await page.screenshot({ path: "artifacts/qa/live-preview-mobile.png" });
+  await player.getByRole("button", { name: "Xem toàn màn hình", exact: true }).click();
+  await expect(player).toHaveAttribute("data-expanded", "true");
+  await expect.poll(async () => (await iframe.boundingBox())!.height).toBeGreaterThan(844 * 0.95);
+  await expect.poll(() => creative.locator("html").evaluate(() => [innerWidth, innerHeight])).toEqual([390, 844]);
+  await clickPlayableButton("Chơi lại");
+  await page.screenshot({ path: "artifacts/qa/live-preview-mobile-fullscreen.png" });
+  await player.getByRole("button", { name: "Thu nhỏ preview", exact: true }).click();
+  await expect(player).toHaveAttribute("data-expanded", "false");
   await player.focus();
   await page.keyboard.press("Escape");
   await expect(player).toBeHidden();

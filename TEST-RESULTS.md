@@ -42,6 +42,13 @@ Preview/ảnh tự động được xác minh trong ứng dụng Next thật v�
 - Nút **Xem dự án** chuyển từ card vào đúng trang dự án và kho playable của dự án đó. Browser test dùng nút này trong luồng tạo/sửa dự án.
 - Chạy lại 50 unit test, TypeScript strict và ESLint đều đạt. Không thay đổi schema hoặc RLS; 67 kiểm tra database ở trên là lượt trước phần thay đổi giao diện này.
 
+### Preview lớn và toàn màn hình (24/10)
+
+- Thu gọn tiêu đề và thanh thiết bị, bỏ dòng hướng dẫn ở footer, giới hạn bề ngang dialog dọc và dùng gần trọn chiều cao cửa sổ. Bỏ giới hạn phóng lớn 100% nhưng giữ nguyên viewport logic của thiết bị.
+- **Xem full** mở toàn màn hình, ẩn thanh thiết bị; chỉ giữ nút thu nhỏ và đóng. Có fallback kín cửa sổ nếu Fullscreen API không khả dụng. Chuyển chế độ không tải lại iframe hoặc mất trạng thái đang chơi.
+- Đã chạy **4/4 E2E**, khoảng 1,1 phút. Test xác nhận khung thường chiếm trên 82% chiều cao viewport desktop và trên 80% trên mobile; chế độ full chiếm trên 95%. Kiểm tra thao tác chuột thật, thoát bằng Escape từ điều khiển, thu nhỏ, nguồn iframe giữ đúng 390 × 844 và fallback khi fullscreen bị tắt.
+- Đã xem ảnh desktop, mobile và chế độ full; không bị cắt mép preview. 50 unit test, TypeScript và lint đạt. Không đổi schema, RLS hoặc nguồn build.
+
 ### Bản sửa liên kết email mặc định
 
 Supabase Free hiện không cho tùy chỉnh email khi chưa có SMTP riêng. Đã bổ sung `/auth/complete` và listener chuyển fragment Invite/Recovery từ Site URL sang route này; xóa token khỏi địa chỉ trước khi gọi Auth, lưu cookie bằng SSR client, xác minh user rồi mới chuyển sang trang tự đặt mật khẩu. Sáu unit test mới kiểm tra dữ liệu thiếu/sai/trùng, loại luồng không được hỗ trợ, thứ tự xác thực và lỗi không lộ token. Code đã được rà soát độc lập; chưa xác nhận luồng email thật trước khi thành viên đầu tiên nhận lời mời.
@@ -62,6 +69,8 @@ Fixture chỉ nằm trong `tests/e2e/supabase-fixture.mjs`; ứng dụng product
 - [Gallery mobile](artifacts/qa/gallery-mobile.png)
 - [Preview desktop](artifacts/qa/live-preview.png)
 - [Preview mobile](artifacts/qa/live-preview-mobile.png)
+- [Preview toàn màn hình](artifacts/qa/live-preview-fullscreen.png)
+- [Preview mobile toàn màn hình](artifacts/qa/live-preview-mobile-fullscreen.png)
 - [Card dự án và nút xem dự án](artifacts/qa/project-cards.png)
 
 ### Các invariant database đã xác minh

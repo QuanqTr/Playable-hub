@@ -14,11 +14,12 @@ Production: [playable-hub-nu.vercel.app](https://playable-hub-nu.vercel.app). So
 | `pnpm test:db` | **67/67 PASS** | Migration thực thi trên PGlite/PostgreSQL với Auth/Storage stub |
 | `pnpm build` | PASS | Production build Next.js, các route và Proxy |
 | `pnpm test:e2e` | **3/3 PASS (23/10)** | Edge headless, Next.js thật, HTTP backend fixture; chưa chạy lại browser test sau bản sửa callback mặc định |
-| HTTP smoke production local | PASS | `/` redirect dự án; dự án/playable redirect thiết lập khi thiếu cấu hình; setup/login 200; file API 503 và không cấp file khi chưa cấu hình |
+| HTTP smoke bản build local (23/10) | PASS | `/` redirect dự án; dự án/playable redirect thiết lập khi thiếu cấu hình; setup/login 200; file API 503 và không cấp file khi chưa cấu hình |
 | Kiểm tra ảnh desktop/mobile | PASS | Xem trực tiếp ảnh 1440px và 390px, không tràn ngang trang; panel mobile toàn màn hình |
 | Migration Supabase cloud | PASS (23/10) | SQL Editor báo thành công, tạo schema/RLS/private buckets từ migration ban đầu |
 | Anonymous API Supabase cloud | PASS (23/10) | 5 bảng và RPC trả 401/42501; public sign-up đã tắt; Storage anonymous chỉ trả danh sách trống |
 | Vercel production ban đầu | PASS | Deployment READY, Node.js 24.x, trang đăng nhập đã được mở và kiểm tra thực tế |
+| Vercel production sau bản sửa Auth (24/10) | PASS | Commit `96a65c9` READY qua Vercel API; `/login` và `/auth/complete` trả 200 với đúng tiêu đề; `/projects` và `/playables` trả 307 tới `/login`; API file trả 401 khi chưa đăng nhập |
 
 `pnpm verify` đã chạy thành công toàn bộ typecheck → lint → unit test → PostgreSQL test → production build sau các chỉnh sửa cuối.
 

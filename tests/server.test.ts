@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   config: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn(),
+  getStoreIcon: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.createClient }));
@@ -15,8 +16,9 @@ vi.mock("@/lib/supabase/config", async () => {
 });
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
+vi.mock("@/lib/store-icon", () => ({ getStoreIcon: mocks.getStoreIcon }));
 
-import { savePlayable, saveProject, setArchived, signIn } from "@/lib/actions";
+import { deleteArchived, savePlayable, saveProject, setArchived, signIn } from "@/lib/actions";
 import { GET as downloadFile } from "@/app/api/files/[id]/route";
 import { GET as confirmInvitation } from "@/app/auth/confirm/route";
 import { GET as authCallback } from "@/app/auth/callback/route";
@@ -80,9 +82,20 @@ describe("authenticated data mutations", () => {
     const insert = vi.fn().mockReturnValue({ select });
     const from = vi.fn().mockReturnValue({ insert });
     mocks.createClient.mockResolvedValue({ auth: authenticated(), from });
-    expect(await saveProject({ name: "Pocket Builder", owner_id: userId, status: "active", created_by: "forged" })).toEqual({ ok: true, data: { id: projectId } });
+    expect(await saveProject({ name: "Pocket Builder", owner_id: userId, status: "active", created_by: "forged" })).toEqual({ ok: true, data: { id: projectId, iconFound: true } });
     expect(from).toHaveBeenCalledWith("projects");
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ created_by: userId, updated_by: userId }));
+  });
+
+  it("resolves and stores the icon from a validated store listing", async () => {
+    mocks.getStoreIcon.mockResolvedValue("https://play-lh.googleusercontent.com/icon");
+    const single = vi.fn().mockResolvedValue({ data: { id: projectId }, error: null });
+    const insert = vi.fn().mockReturnValue({ select: () => ({ single }) });
+    mocks.createClient.mockResolvedValue({ auth: authenticated(), from: () => ({ insert }) });
+    const result = await saveProject({ name: "Pocket Builder", owner_id: userId, status: "active", store_url: "https://play.google.com/store/apps/details?id=com.example.game&hl=vi" });
+    expect(result).toEqual({ ok: true, data: { id: projectId, iconFound: true } });
+    expect(mocks.getStoreIcon).toHaveBeenCalledWith("https://play.google.com/store/apps/details?id=com.example.game");
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ store_url: "https://play.google.com/store/apps/details?id=com.example.game", app_icon_url: "https://play-lh.googleusercontent.com/icon" }));
   });
 
   it("requires restoring a parent project before its playable", async () => {
@@ -92,6 +105,15 @@ describe("authenticated data mutations", () => {
     mocks.createClient.mockResolvedValue({ auth: authenticated(), from });
     expect(await setArchived("playable", playableId, false)).toMatchObject({ ok: false, error: expect.stringContaining("Khôi phục dự án") });
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it("keeps a successful permanent deletion successful when file cleanup must be retried", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: projectId, error: null });
+    const from = vi.fn().mockReturnValue({ select: () => ({ order: () => ({ limit: () => Promise.reject(new Error("Storage offline")) }) }) });
+    mocks.createClient.mockResolvedValue({ auth: authenticated(), rpc, from });
+    expect(await deleteArchived("playable", playableId)).toEqual({ ok: true, data: { cleanupPending: true } });
+    expect(rpc).toHaveBeenCalledWith("delete_archived_playable", { p_id: playableId });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/projects/${projectId}`);
   });
 });
 

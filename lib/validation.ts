@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { BUILD_MAX_BYTES, THUMBNAIL_MAX_BYTES } from "./constants";
+import { parseStoreUrl } from "./store-url";
 const optionalText = (max: number) => z.string().trim().max(max, `Tối đa ${max} ký tự.`).nullish().transform(v => v || null);
 const uuid = z.string().uuid("Vui lòng chọn giá trị hợp lệ.");
 const storagePath = z.string().regex(/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.[a-z0-9]+$/, "Đường dẫn file không hợp lệ.").nullish().transform(v => v || null);
 export const projectSchema = z.object({
   id: uuid.optional(), name: z.string().trim().min(1, "Nhập tên dự án.").max(160, "Tối đa 160 ký tự."),
-  description: optionalText(4000), owner_id: uuid, status: z.enum(["active", "paused", "completed"])
+  description: optionalText(4000),
+  store_url: optionalText(2048).refine(v => !v || !!parseStoreUrl(v), "Dùng URL ứng dụng từ Google Play hoặc App Store."),
+  owner_id: uuid, status: z.enum(["active", "paused", "completed"])
 });
 export const playableSchema = z.object({
   id: uuid.optional(), name: z.string().trim().min(1, "Nhập tên playable.").max(160, "Tối đa 160 ký tự."),

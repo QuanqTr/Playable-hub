@@ -6,6 +6,8 @@ import type { ZodError } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseConfig, safeNextPath } from "@/lib/supabase/config";
 import { playableSchema, projectSchema } from "@/lib/validation";
+import { getStoreIcon } from "@/lib/store-icon";
+import { parseStoreUrl } from "@/lib/store-url";
 import type { ActionResult } from "@/lib/types";
 
 function validationFailure(error: ZodError): ActionResult<never> {
@@ -21,6 +23,7 @@ function databaseMessage(error: { code?: string; message?: string }, fallback: s
   if (error.code === "42501") return "Phiên đăng nhập không có quyền lưu dữ liệu. Vui lòng đăng nhập lại.";
   if (error.code === "23503") return "Dự án, network hoặc thành viên đã thay đổi. Tải lại trang và thử lại.";
   if (error.code === "23514") return "Dữ liệu hoặc thông tin file không hợp lệ. Vui lòng kiểm tra lại.";
+  if (["42703", "PGRST204"].includes(error.code ?? "")) return "Chưa cập nhật cấu trúc Supabase. Hãy chạy migration mới trong supabase/migrations.";
   if (["P0001", "P0002", "22023"].includes(error.code ?? "") && error.message) return error.message;
   return fallback;
 }
@@ -40,19 +43,29 @@ function refreshLists(projectId?: string, playableId?: string) {
   if (playableId) revalidatePath(`/playables/${playableId}`);
 }
 
-export async function saveProject(input: unknown): Promise<ActionResult<{ id: string }>> {
+export async function saveProject(input: unknown): Promise<ActionResult<{ id: string; iconFound: boolean }>> {
   const parsed = projectSchema.safeParse(input);
   if (!parsed.success) return validationFailure(parsed.error);
   try {
     const { supabase, user } = await authenticatedClient();
     const { id, ...values } = parsed.data;
+    const storeUrl = values.store_url ? parseStoreUrl(values.store_url)?.url ?? null : null;
+    let appIconUrl: string | null = null;
+    if (id) {
+      const { data: previous, error: previousError } = await supabase.from("projects")
+        .select("store_url,app_icon_url").eq("id", id).maybeSingle();
+      if (previousError || !previous) return { ok: false, error: databaseMessage(previousError ?? {}, "Không tìm thấy dự án để chỉnh sửa.") };
+      appIconUrl = previous.store_url === storeUrl ? previous.app_icon_url : null;
+    }
+    if (storeUrl && !appIconUrl) appIconUrl = await getStoreIcon(storeUrl);
+    const projectValues = { ...values, store_url: storeUrl, app_icon_url: appIconUrl };
     const request = id
-      ? supabase.from("projects").update({ ...values, updated_by: user.id }).eq("id", id)
-      : supabase.from("projects").insert({ ...values, created_by: user.id, updated_by: user.id });
+      ? supabase.from("projects").update({ ...projectValues, updated_by: user.id }).eq("id", id)
+      : supabase.from("projects").insert({ ...projectValues, created_by: user.id, updated_by: user.id });
     const { data, error } = await request.select("id").single();
     if (error || !data) return { ok: false, error: databaseMessage(error ?? {}, "Không lưu được dự án. Vui lòng thử lại.") };
     refreshLists(data.id);
-    return { ok: true, data: { id: data.id } };
+    return { ok: true, data: { id: data.id, iconFound: !storeUrl || !!appIconUrl } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Không kết nối được máy chủ. Vui lòng thử lại." };
   }
@@ -100,6 +113,50 @@ export async function setArchived(kind: "project" | "playable", id: string, arch
     return { ok: true, data: undefined };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Không kết nối được máy chủ. Vui lòng thử lại." };
+  }
+}
+
+async function clearPendingAssets(supabase: Awaited<ReturnType<typeof createClient>>): Promise<boolean> {
+  try {
+    const { data: rows, error } = await supabase.from("pending_asset_deletions")
+      .select("bucket_id,path").order("id").limit(100);
+    if (error || !rows) return true;
+    if (!rows.length) return false;
+    for (const bucket of ["playable-builds", "playable-thumbnails"] as const) {
+      const assets = rows.filter(row => row.bucket_id === bucket);
+      if (!assets.length) continue;
+      await supabase.storage.from(bucket).remove(assets.map(row => row.path));
+    }
+    const { count, error: countError } = await supabase.from("pending_asset_deletions")
+      .select("id", { count: "exact", head: true });
+    return !!countError || (count ?? 0) > 0;
+  } catch {
+    return true;
+  }
+}
+
+export async function deleteArchived(kind: "project" | "playable", id: string): Promise<ActionResult<{ cleanupPending: boolean }>> {
+  if (!["project", "playable"].includes(kind) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return { ok: false, error: "Thao tác không hợp lệ." };
+  }
+  try {
+    const { supabase } = await authenticatedClient();
+    const { data: projectId, error } = await supabase.rpc(kind === "project" ? "delete_archived_project" : "delete_archived_playable", { p_id: id });
+    if (error || !projectId) return { ok: false, error: databaseMessage(error ?? {}, "Không thể xóa vĩnh viễn. Vui lòng thử lại.") };
+    const cleanupPending = await clearPendingAssets(supabase);
+    refreshLists(kind === "project" ? id : projectId, kind === "playable" ? id : undefined);
+    return { ok: true, data: { cleanupPending } };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không kết nối được máy chủ. Vui lòng thử lại." };
+  }
+}
+
+export async function retryPendingAssetCleanup(): Promise<ActionResult<{ cleanupPending: boolean }>> {
+  try {
+    const { supabase } = await authenticatedClient();
+    return { ok: true, data: { cleanupPending: await clearPendingAssets(supabase) } };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Không dọn được file. Vui lòng thử lại." };
   }
 }
 

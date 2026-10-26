@@ -205,3 +205,50 @@ a.entity-name:hover { color: var(--primary); }
 @media (max-width: 720px) { .main-content { padding-top: 24px; } .page-heading h1 { font-size: 27px; } .playable-grid,.playable-gallery { gap: 16px; } .playable-card-header { min-height: 78px; } .project-grid { padding: 0 16px 18px; gap: 14px; } .gallery-surface .filters { padding: 16px 0 0; } .gallery-surface .results-heading { padding: 16px 0; } .playable-card-meta .mono { font-size: 11px; } }
 @media (max-width: 580px) { .playable-grid,.playable-gallery,.project-grid { grid-template-columns: minmax(0,1fr); } .playable-card-heading h2 { font-size: 15px; } .playable-artwork { aspect-ratio: 9/12; } .project-card { padding: 19px; } .filter-options .filter-select { flex: 1 1 calc(50% - 12px); } }
 @media (prefers-reduced-motion: reduce) { .skeleton::after,.preview-shimmer::after,.navigation-progress::after,.link-pending-indicator svg { animation: none; } }
+
+/* Project discovery cards */
+.project-grid { gap: 20px; }
+.project-card { display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 18px; box-shadow: 0 8px 26px #26394a0a; }
+.project-card:hover { border-color: #a6cbb8; box-shadow: 0 16px 38px #1b584b1b; transform: translateY(-2px); }
+.project-card-visual { position: relative; min-height: 164px; padding: 17px 18px; overflow: hidden; background: linear-gradient(135deg,#e5f7ef,#c8ebdc 63%,#a5d5c3); }
+.project-card[data-status="paused"] .project-card-visual { background: linear-gradient(135deg,#fff4e5,#f8dfad 65%,#edc980); }
+.project-card[data-status="completed"] .project-card-visual { background: linear-gradient(135deg,#edf2fa,#dbe4f1 65%,#c5d2e4); }
+.project-card-visual::after { content: ""; position: absolute; width: 240px; height: 240px; right: -90px; bottom: -145px; border: 35px solid #ffffff4d; border-radius: 50%; pointer-events: none; }
+.project-card-top { position: relative; z-index: 1; align-items: start; }
+.project-card-eyebrow { color: #42685c; font-size: 10px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.project-card-icon-link { position: relative; z-index: 1; display: inline-flex; margin-top: 16px; border-radius: 24px; }
+.project-card-icon { width: 92px; height: 92px; display: grid; place-items: center; overflow: hidden; border: 4px solid #ffffffdc; border-radius: 24px; background: #ffffffeb; color: #398865; box-shadow: 0 11px 28px #174a3d32; }
+.project-card-icon img { width: 100%; height: 100%; object-fit: cover; }
+.project-card-content { display: flex; flex: 1; flex-direction: column; padding: 20px; min-width: 0; }
+.project-card h2 { margin: 0 0 8px; font-size: 18px; line-height: 1.35; color: #1b2f2a; }
+.project-card h2 a:hover { color: #087b53; }
+.project-card h2 mark { border-radius: 3px; background: #fff0ad; color: #173c2d; box-shadow: 0 0 0 2px #fff0ad; }
+.project-card-description { min-height: 42px; margin: 0 0 16px; color: #687a75; font-size: 12px; line-height: 1.7; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.project-card-facts { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; color: #758982; font-size: 11px; }
+.project-card-count { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 8px; background: #eaf6ee; color: #277c55; font-weight: 600; }
+.project-card-count strong { color: #115d3b; font-size: 15px; }
+.project-card-bottom { margin-top: 17px; padding-top: 14px; color: #667c72; }
+.project-store-link { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; color: #167954; font-weight: 700; }
+.project-store-link:hover { text-decoration: underline; }
+.project-card-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: center; gap: 6px; margin-top: auto; padding-top: 18px; }
+.project-card-actions .project-open-button { grid-column: 1 / -1; width: 100%; margin: 0; min-width: 0; }
+.project-card-actions button { width: 100%; }
+.project-card-actions button,.project-card-actions a { height: 36px; padding-inline: 10px; font-size: 11px; }
+.delete-trigger { color: #aa4048; border-color: #f0d2d4; }
+.delete-trigger:hover { background: #fff0f0; }
+
+/* Make the win level readable at a glance across cards and details. */
+.badge[class*="win-"] { gap: 7px; border: 1px solid currentColor; padding: 7px 11px; font-size: 12px; font-weight: 750; box-shadow: 0 2px 6px #1e293b0a; }
+.badge[class*="win-"] .badge-dot { width: 7px; height: 7px; }
+.playable-card-win { padding: 11px 12px; border: 1px solid #e4eee8; border-left: 4px solid #71b893; border-radius: 9px; background: #f5faf7; }
+.playable-card-win:has(.win-unreviewed) { border-left-color: #a8b2bd; background: #f7f8fa; }
+.playable-card-win:has(.win-not_winning) { border-left-color: #d66a70; background: #fff7f7; }
+.playable-card-win:has(.win-testing) { border-left-color: #5c9bd2; background: #f5f9ff; }
+.playable-card-win:has(.win-promising) { border-left-color: #d4a246; background: #fffaf1; }
+.playable-card-win:has(.win-scaling) { border-left-color: #9b74cf; background: #faf7ff; }
+.playable-card-win > span:first-child { color: #344c42; font-size: 12px; font-weight: 700; }
+.playable-card-win .badge { font-size: 12px; padding: 7px 11px; }
+.playable-card-actions { display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 10px; border-top: 1px solid #edf1ee; }
+.archive-cleanup-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 0 22px 18px; padding: 12px 14px; border: 1px solid #f1dbc4; border-radius: 9px; background: #fffaf3; color: #8b5d2d; font-size: 12px; }
+
+@media (max-width: 720px) { .project-card-content { padding: 18px; } }

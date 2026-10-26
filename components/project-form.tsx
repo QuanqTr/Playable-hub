@@ -22,6 +22,7 @@ export function ProjectForm({ profiles, project, onSuccess }: { profiles: Profil
   const [pending, setPending] = useState(false);
   const [name, setName] = useState(project?.name ?? "");
   const [description, setDescription] = useState(project?.description ?? "");
+  const [storeUrl, setStoreUrl] = useState(project?.store_url ?? "");
   const [owner, setOwner] = useState(project?.owner_id ?? "");
   const [status, setStatus] = useState<ProjectStatus>(project?.status ?? "active");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -37,7 +38,7 @@ export function ProjectForm({ profiles, project, onSuccess }: { profiles: Profil
     if (pending) return;
     setError("");
     setErrors({});
-    const input = { ...(project ? { id: project.id } : {}), name, description, owner_id: owner, status };
+    const input = { ...(project ? { id: project.id } : {}), name, description, store_url: storeUrl, owner_id: owner, status };
     const parsed = projectSchema.safeParse(input);
     if (!parsed.success) {
       setErrors(Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0]), issue.message])));
@@ -47,9 +48,10 @@ export function ProjectForm({ profiles, project, onSuccess }: { profiles: Profil
     try {
       const result = await saveProject(parsed.data);
       if (!result.ok) { setError(result.error); setErrors(result.fieldErrors ?? {}); return; }
-      toast.success(project ? "Đã cập nhật dự án." : "Đã tạo dự án.");
+      if (result.data.iconFound) toast.success(project ? "Đã cập nhật dự án." : "Đã tạo dự án.");
+      else toast.warning("Đã lưu dự án, nhưng chưa lấy được icon từ URL store. Hãy kiểm tra lại liên kết.");
       setOpen(false);
-      if (!project) { setName(""); setDescription(""); setOwner(""); setStatus("active"); }
+      if (!project) { setName(""); setDescription(""); setStoreUrl(""); setOwner(""); setStatus("active"); }
       router.refresh();
       onSuccess?.();
     } catch { setError("Không lưu được dự án. Vui lòng thử lại; dữ liệu đã nhập vẫn được giữ."); }
@@ -64,6 +66,7 @@ export function ProjectForm({ profiles, project, onSuccess }: { profiles: Profil
         <fieldset disabled={pending} className="space-y-4">
           <div className="field"><Label htmlFor={`${id}-name`}>Tên dự án <span aria-hidden="true">*</span></Label><Input id={`${id}-name`} value={name} onChange={event => setName(event.target.value)} maxLength={160} required placeholder="Ví dụ: Color Sort" {...fieldProps("name")} />{fieldError("name")}</div>
           <div className="field"><Label htmlFor={`${id}-description`}>Mô tả</Label><Textarea id={`${id}-description`} value={description} onChange={event => setDescription(event.target.value)} maxLength={4000} rows={3} placeholder="Mô tả ngắn về dự án…" {...fieldProps("description")} />{fieldError("description")}</div>
+          <div className="field"><Label htmlFor={`${id}-store-url`}>URL Google Play hoặc App Store</Label><Input id={`${id}-store-url`} type="url" value={storeUrl} onChange={event => setStoreUrl(event.target.value)} maxLength={2048} placeholder="https://play.google.com/store/apps/details?id=..." {...fieldProps("store_url")} />{fieldError("store_url")}<p className="field-hint">Icon ứng dụng sẽ được lấy tự động khi lưu dự án. Để trống nếu chưa phát hành trên store.</p></div>
           <div className="form-grid">
             <div className="field"><Label htmlFor={`${id}-owner`}>Người phụ trách <span aria-hidden="true">*</span></Label><select className="select" id={`${id}-owner`} value={owner} onChange={event => setOwner(event.target.value)} required {...fieldProps("owner_id")}><option value="">Chọn thành viên</option>{profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.display_name || profile.email}</option>)}</select>{fieldError("owner_id")}</div>
             <div className="field"><Label htmlFor={`${id}-status`}>Trạng thái</Label><select className="select" id={`${id}-status`} value={status} onChange={event => setStatus(event.target.value as ProjectStatus)} {...fieldProps("status")}>{Object.entries(PROJECT_STATUSES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{fieldError("status")}</div>

@@ -24,6 +24,8 @@ let serial = 0;
 let lastTime = Date.now();
 let failNext = null;
 let delayNext = null;
+let pendingAssetDeletions = [];
+let cleanupSerial = 0;
 const objects = new Map();
 const signedTokens = new Map();
 
@@ -43,12 +45,19 @@ function authenticated(req) {
 function session() { return { access_token: jwt(), refresh_token: "fixture-refresh-token", token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user }; }
 function makeProject(values) {
   const now = timestamp();
-  return { id: randomUUID(), name: "", description: null, owner_id: userId, status: "active", archived_at: null, created_by: userId, updated_by: userId, created_at: now, updated_at: now, ...values };
+  return { id: randomUUID(), name: "", description: null, store_url: null, app_icon_url: null, owner_id: userId, status: "active", archived_at: null, created_by: userId, updated_by: userId, created_at: now, updated_at: now, ...values };
 }
 function makePlayable(values) {
   const now = timestamp();
   serial += 1;
   return { id: randomUUID(), code: `PL-${String(serial).padStart(6, "0")}`, name: "", project_id: projectId, win_level: "unreviewed", external_url: "https://cdn.example.test/build.html", storage_path: null, file_name: null, file_size: null, file_mime: null, thumbnail_path: null, released_at: null, notes: null, archived_at: null, created_by: userId, updated_by: userId, created_at: now, updated_at: now, network_ids: ["unity-ads"], ...values };
+}
+function queueAssets(playable) {
+  for (const [bucket_id, path] of [["playable-builds", playable.storage_path], ["playable-thumbnails", playable.thumbnail_path]]) {
+    if (path && !pendingAssetDeletions.some(row => row.bucket_id === bucket_id && row.path === path)) {
+      pendingAssetDeletions.push({ id: ++cleanupSerial, bucket_id, path });
+    }
+  }
 }
 // Self-contained ad creatives for local visual QA only. No remote images, fonts,
 // analytics or production data are needed to exercise HTML capture and play.
@@ -63,7 +72,7 @@ function previewHtml(index) {
   return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${theme.title}</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{font-family:Arial,sans-serif;background:${theme.background};color:white}.creative{position:relative;width:100%;height:100%;min-height:500px;overflow:hidden;background:radial-gradient(ellipse at 50% 38%,${theme.glow}44,transparent 62%)}.tag{position:absolute;top:25px;left:24px;font-size:10px;letter-spacing:2px;opacity:.65}.score{position:absolute;right:22px;top:21px;padding:7px 10px;border:1px solid #ffffff36;border-radius:20px;font-size:11px}.copy{position:absolute;top:76px;width:100%;padding:0 22px;text-align:center}.copy p{font-size:10px;letter-spacing:3px;color:${theme.accent};margin:0 0 10px}.copy h1{margin:0;font-weight:900;font-size:39px;line-height:.96;letter-spacing:-2px;text-shadow:0 5px 24px ${theme.background}}svg{position:absolute;width:100%;height:63%;left:0;top:23%}.bottom{position:absolute;bottom:27px;left:23px;right:23px;text-align:center}.bottom p{font-size:12px;color:#ffffffbb;letter-spacing:.2px;margin:0 0 15px}button{border:0;background:${theme.accent};color:${theme.background};border-radius:16px;padding:17px 20px;width:100%;font-weight:800;font-size:16px;box-shadow:0 8px 25px #0004;cursor:pointer}.dots{font-size:14px;letter-spacing:7px;opacity:.5;margin-top:17px}</style></head><body><main class="creative"><span class="tag">PLAYABLE STUDIO</span><span class="score">LEVEL ${String(index).padStart(2, "0")}</span><div class="copy"><p>${theme.label}</p><h1>${theme.title}</h1></div><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 440">${theme.scene}</svg><div class="bottom"><p id="message">A little challenge. A big adventure.</p><button id="start" onclick="document.getElementById('message').textContent='Bạn đã bắt đầu!';this.textContent='Chơi lại'">Bắt đầu chơi</button><div class="dots">● ○ ○</div></div></main></body></html>`;
 }
 function reset(seed = true) {
-  projects = []; playables = []; serial = 0; failNext = null; delayNext = null; objects.clear(); signedTokens.clear();
+  projects = []; playables = []; serial = 0; failNext = null; delayNext = null; pendingAssetDeletions = []; cleanupSerial = 0; objects.clear(); signedTokens.clear();
   if (seed) {
     projects.push(makeProject({ id: projectId, name: "Dự án mẫu", description: "Dữ liệu fixture dành riêng cho kiểm thử." }));
     const names = ["Neon Drift", "Garden Merge", "Cosmic Match", "Castle Quest"];
@@ -114,7 +123,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/__test/reset" && req.method === "POST") { const data = JSON.parse((await body(req)).toString() || "{}"); reset(data.seed !== false); return send(res, 200, { ok: true }); }
     if (url.pathname === "/__test/fail-next" && req.method === "POST") { failNext = JSON.parse((await body(req)).toString()).kind; return send(res, 200, { ok: true }); }
     if (url.pathname === "/__test/delay-next" && req.method === "POST") { const data = JSON.parse((await body(req)).toString()); delayNext = { kind: data.kind, ms: Math.max(0, Math.min(2000, Number(data.ms) || 0)) }; return send(res, 200, { ok: true }); }
-    if (url.pathname === "/__test/state") return send(res, 200, { projects, playables, objectCount: objects.size });
+    if (url.pathname === "/__test/state") return send(res, 200, { projects, playables, objectCount: objects.size, pendingAssetDeletions });
 
     if (url.pathname === "/auth/v1/token" && req.method === "POST") {
       const data = JSON.parse((await body(req)).toString());
@@ -151,9 +160,40 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { Key: key, Id: randomUUID() });
       }
       if (req.method === "DELETE") {
+        if (failNext === "storage-delete") { failNext = null; return send(res, 500, { message: "Fixture: Storage cleanup failed." }); }
         const data = JSON.parse((await body(req)).toString());
-        for (const path of data.prefixes || []) objects.delete(`${key}/${path}`);
+        for (const path of data.prefixes || []) {
+          objects.delete(`${key}/${path}`);
+          pendingAssetDeletions = pendingAssetDeletions.filter(row => !(row.bucket_id === key && row.path === path));
+        }
         return send(res, 200, []);
+      }
+    }
+
+    if (url.pathname === "/rest/v1/rpc/delete_archived_playable") {
+      const { p_id } = JSON.parse((await body(req)).toString());
+      const playable = playables.find(p => p.id === p_id);
+      if (!playable) return send(res, 404, { code: "P0002", message: "Không tìm thấy playable." });
+      const parent = projects.find(p => p.id === playable.project_id);
+      if (!playable.archived_at && !parent?.archived_at) return send(res, 400, { code: "22023", message: "Lưu trữ playable trước khi xóa vĩnh viễn." });
+      queueAssets(playable);
+      playables = playables.filter(p => p.id !== p_id);
+      return send(res, 200, playable.project_id);
+    }
+    if (url.pathname === "/rest/v1/rpc/delete_archived_project") {
+      const { p_id } = JSON.parse((await body(req)).toString());
+      const project = projects.find(p => p.id === p_id);
+      if (!project) return send(res, 404, { code: "P0002", message: "Không tìm thấy dự án." });
+      if (!project.archived_at) return send(res, 400, { code: "22023", message: "Lưu trữ dự án trước khi xóa vĩnh viễn." });
+      playables.filter(p => p.project_id === p_id).forEach(queueAssets);
+      playables = playables.filter(p => p.project_id !== p_id);
+      projects = projects.filter(p => p.id !== p_id);
+      return send(res, 200, p_id);
+    }
+    if (url.pathname === "/rest/v1/pending_asset_deletions") {
+      if (req.method === "HEAD" || req.method === "GET") {
+        const limit = Number(url.searchParams.get("limit") || pendingAssetDeletions.length);
+        return sendRows(req, res, pendingAssetDeletions.slice(0, limit), pendingAssetDeletions.length);
       }
     }
 

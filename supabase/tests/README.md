@@ -33,8 +33,8 @@ node --env-file=.env.local supabase/tests/concurrency.mjs
 
 This test sends 24 parallel creates, verifies unique IDs/codes and two separate
 12-row pages, then archives its fixture project. It intentionally leaves archived
-records because the MVP never permanently deletes builds. Use a dedicated test
-project. Missing configuration exits before creating anything.
+records for inspection; use a dedicated test project. Missing configuration exits
+before creating anything.
 
 The SQL tests use Storage **metadata fixtures**, not real file blobs. Verify real
 upload (including MIME/size rejection), signed download, expiration, sign-in,

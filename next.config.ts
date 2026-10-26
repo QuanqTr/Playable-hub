@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
   poweredByHeader: false,
+  images: { remotePatterns: [
+    { protocol: "https", hostname: "play-lh.googleusercontent.com" },
+    { protocol: "https", hostname: "*.mzstatic.com" },
+  ] },
   async headers() {
     return [{ source: "/:path*", headers: [
       { key: "X-Content-Type-Options", value: "nosniff" },

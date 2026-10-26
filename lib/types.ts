@@ -3,7 +3,7 @@ export type WinLevel = "unreviewed" | "testing" | "not_winning" | "promising" | 
 export interface Profile { id: string; display_name: string; email: string }
 export interface Network { id: string; name: string }
 export interface Project {
-  id: string; name: string; description: string | null; owner_id: string;
+  id: string; name: string; description: string | null; store_url: string | null; app_icon_url: string | null; owner_id: string;
   status: ProjectStatus; archived_at: string | null;
   created_by: string; updated_by: string; created_at: string; updated_at: string;
   owner: Profile; playable_count: number;

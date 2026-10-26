@@ -14,7 +14,7 @@ export default defineConfig({
   webServer: [
     { command: "node tests/e2e/supabase-fixture.mjs", url: "http://127.0.0.1:54329/__test/health", reuseExistingServer: !process.env.CI, timeout: 30_000 },
     {
-      command: "pnpm exec next dev --hostname 127.0.0.1 --port 3100",
+      command: "corepack.cmd pnpm exec next dev --hostname 127.0.0.1 --port 3100",
       url: "http://127.0.0.1:3100/login",
       reuseExistingServer: false,
       timeout: 120_000,

@@ -81,6 +81,13 @@ export const getLookups = cache(async (): Promise<Lookups> => {
   } as Lookups;
 });
 
+export const getPendingCleanupCount = cache(async (): Promise<number> => {
+  const { supabase } = await requireUser();
+  const { count, error } = await supabase.from("pending_asset_deletions").select("id", { count: "exact", head: true });
+  readableDataError(error, "Không tải được trạng thái dọn file. Kiểm tra migration Supabase.");
+  return count ?? 0;
+});
+
 export function getProjects(filters: Filters = {}): Promise<PageResult<Project>> {
   return getProjectsForRequest(filterCacheKey(filters));
 }

@@ -9,6 +9,7 @@ import { formatBytes, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PlayableForm } from "@/components/playable-form";
 import { ArchiveButton } from "@/components/archive-button";
+import { PermanentDeleteButton } from "@/components/permanent-delete-button";
 import { ProjectBadge, WinBadge } from "@/components/status-badge";
 import { PlayableCover } from "@/components/playable-cover";
 import { NetworkTag } from "@/components/network-tag";
@@ -48,7 +49,7 @@ export function PlayablePanel({ playable, lookups, closeHref }: { playable: Play
           <section className="space-y-2 border-t border-slate-200 pt-5"><h3 className="text-sm font-semibold text-slate-900">Ghi chú</h3><p className={`whitespace-pre-wrap break-words text-sm leading-6 ${playable.notes ? "text-slate-600" : "text-slate-400"}`}>{playable.notes || "Chưa có ghi chú."}</p></section>
           <div className="space-y-2 border-t border-slate-200 pt-5 text-xs leading-5 text-slate-500"><p>Tạo bởi <span className="font-medium text-slate-700">{playable.creator?.display_name || playable.creator?.email || "Thành viên"}</span> · {formatDate(playable.created_at, true)}</p><p>Cập nhật bởi <span className="font-medium text-slate-700">{playable.updater?.display_name || playable.updater?.email || "Thành viên"}</span> · {formatDate(playable.updated_at, true)}</p></div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white px-5 py-4 sm:px-7"><PlayableForm key={`edit-${playable.updated_at}`} lookups={lookups} playable={playable} /><PlayableForm key={`copy-${playable.updated_at}`} lookups={lookups} playable={playable} duplicate /><div className="ml-auto"><ArchiveButton kind="playable" id={playable.id} archived={isArchived} name={playable.name} onSuccess={close} /></div></div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white px-5 py-4 sm:px-7"><PlayableForm key={`edit-${playable.updated_at}`} lookups={lookups} playable={playable} /><PlayableForm key={`copy-${playable.updated_at}`} lookups={lookups} playable={playable} duplicate /><div className="ml-auto flex flex-wrap gap-2">{!playable.project.archived_at && <ArchiveButton kind="playable" id={playable.id} archived={isArchived} name={playable.name} onSuccess={close} />}{(isArchived || playable.project.archived_at) && <PermanentDeleteButton kind="playable" id={playable.id} name={playable.name} onSuccess={close} />}</div></div>
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>;

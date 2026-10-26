@@ -54,6 +54,10 @@ Tạo Supabase project mới. Trong **SQL Editor**, chạy toàn bộ file:
 
 [`supabase/migrations/202610230001_initial.sql`](supabase/migrations/202610230001_initial.sql)
 
+Sau migration ban đầu, chạy tiếp theo thứ tự [`202610260001_project_store.sql`](supabase/migrations/202610260001_project_store.sql) và [`202610260002_archive_delete.sql`](supabase/migrations/202610260002_archive_delete.sql). Migration thứ nhất lưu URL store/icon; migration thứ hai cho phép xóa vĩnh viễn mục đã lưu trữ và tạo hàng chờ dọn file. Với project cloud đã có migration ban đầu, chạy cả hai file mới trước khi deploy giao diện mới. Nếu dùng Supabase CLI, áp dụng các migration theo thứ tự thời gian.
+
+Form dự án tự lấy icon từ URL store khi lưu. Nếu store không trả về icon, dự án vẫn được lưu và hiển thị biểu tượng mặc định. Nút **Xóa** trên dự án/playable chuyển bản ghi vào **Đã lưu trữ**, có thể khôi phục. Trong **Đã lưu trữ** có nút **Xóa vĩnh viễn** với xác nhận; xóa dự án cũng xóa các playable bên trong. File build/ảnh bìa được xóa qua Storage API. Nếu Storage tạm lỗi, đường dẫn còn trong hàng chờ và nút **Dọn file chờ xóa** cho phép thử lại.
+
 Migration chạy trong transaction và chỉ chạy một lần trên schema mới. Nó tạo:
 
 - `profiles`, liên kết `auth.users` và tự tạo hồ sơ khi mời/tạo tài khoản qua Auth; đồng bộ tên/email và backfill thành viên đã có.
@@ -61,7 +65,7 @@ Migration chạy trong transaction và chỉ chạy một lần trên schema m�
 - Sequence sinh mã `PL-000001` an toàn khi tạo đồng thời. Mã có thể có khoảng trống sau rollback và không được đổi/tái sử dụng.
 - RPC `save_playable` lưu metadata và network trong cùng transaction; `list_playables` tìm kiếm, lọc, đếm và phân trang 12 bản ghi ở Postgres.
 - Bucket private `playable-builds`: HTML/ZIP, tối đa **50 MiB**; `playable-thumbnails`: PNG/JPG/WebP, tối đa **5 MiB**.
-- Chính sách cho mọi thành viên quyền cộng tác như nhau; chặn người ẩn danh và xóa vĩnh viễn qua API thành viên.
+- Chính sách cho mọi thành viên quyền cộng tác như nhau; chặn người ẩn danh và xóa trực tiếp bản ghi đang hoạt động qua API thành viên.
 - Audit trigger lấy người tạo/cập nhật từ `auth.uid()`, bảo vệ mã và nguồn build bất biến. Thay build hoặc URL cần bản ghi mới.
 
 Không cần tạo bucket public hoặc thêm policy thủ công. Nếu điều chỉnh giới hạn kho, cập nhật đồng thời `lib/constants.ts`, schema validation, constraint SQL, `storage.buckets.file_size_limit` và cấu hình Storage tổng. Đây là giới hạn kho, không phải tiêu chuẩn của ad network.
@@ -134,7 +138,7 @@ Mọi tài khoản đã được mời/tạo bởi quản trị viên có quyề
 - **Panel chi tiết**: mở tên playable hoặc menu thao tác. `?playable=<uuid>` có thể chia sẻ; đóng panel giữ bộ lọc/trang. `/playables/<uuid>` chuyển đến panel tương ứng.
 - **File hoặc URL**: cần ít nhất một; nguồn build được khóa sau khi lưu. **Tạo bản sao** sao chép metadata và yêu cầu nguồn mới, mã mới, win mặc định “Chưa đánh giá”.
 - **Win** là đánh giá thủ công tổng thể; không tự suy luận hoặc chuyển Win thành Scale.
-- **Đã lưu trữ** là chế độ riêng để khôi phục. Khi lưu trữ dự án, các playable của dự án được ẩn khỏi kho mặc định mà không bị thay đổi trạng thái lưu trữ riêng. Khôi phục dự án sẽ hiển thị lại các build chưa được lưu trữ riêng.
+- **Đã lưu trữ** là chế độ riêng để khôi phục hoặc xóa vĩnh viễn. Khi lưu trữ dự án, các playable của dự án được ẩn khỏi kho mặc định mà không bị thay đổi trạng thái lưu trữ riêng. Khôi phục dự án sẽ hiển thị lại các build chưa được lưu trữ riêng.
 - Khi upload/lưu lỗi, form giữ dữ liệu, hiển thị lỗi và dọn file mới upload bằng Storage API nếu có thể. Nếu dọn thất bại, UI báo rõ để quản trị viên kiểm tra object không được tham chiếu; không tự xóa file đã gắn với bản ghi.
 
 ## Kiểm tra

@@ -32,9 +32,12 @@ test("login protection, project creation/edit, logout and mobile layout", async 
   await expect(projectCard).toBeVisible();
   await mkdir("artifacts/qa", { recursive: true });
   await page.screenshot({ path: "artifacts/qa/project-cards.png" });
+  await page.getByRole("search").getByLabel("Tìm kiếm", { exact: true }).fill("E2E");
+  await page.getByRole("search").getByRole("button", { name: "Áp dụng" }).click();
+  await expect(projectCard.locator("mark")).toHaveText("E2E");
   await projectCard.getByRole("link", { name: "Xem dự án", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Dự án E2E", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).click();
+  await page.locator(".page-heading").getByRole("button", { name: "Chỉnh sửa", exact: true }).click();
   const edit = page.getByRole("dialog", { name: "Chỉnh sửa dự án", exact: true });
   await edit.getByLabel("Người phụ trách").selectOption(secondOwnerId);
   await edit.getByLabel("Trạng thái", { exact: true }).selectOption("paused");
@@ -45,6 +48,23 @@ test("login protection, project creation/edit, logout and mobile layout", async 
   await expect(page.getByText("Tạm dừng", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.goto("/projects");
+  const editedCard = page.locator("article.project-card").filter({ has: page.getByRole("link", { name: "Dự án E2E", exact: true }) });
+  await editedCard.getByRole("button", { name: "Xóa", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Xóa khỏi danh sách" }).click();
+  await expect(editedCard).toBeHidden();
+  await page.goto("/projects?archived=true");
+  await expect(editedCard).toBeVisible();
+  await editedCard.getByRole("button", { name: "Khôi phục" }).click();
+  await page.goto("/projects");
+  await editedCard.getByRole("button", { name: "Xóa", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Xóa khỏi danh sách" }).click();
+  await page.goto("/projects?archived=true");
+  await editedCard.getByRole("button", { name: "Xóa vĩnh viễn" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Xóa vĩnh viễn" }).click();
+  await expect(page.getByRole("alertdialog")).toBeHidden();
+  await expect(editedCard).toBeHidden();
+  await expect.poll(async () => (await (await page.request.get(`${fixture}/__test/state`)).json()).projects.some((project: { name: string }) => project.name === "Dự án E2E")).toBe(false);
   await page.getByRole("button", { name: "Đăng xuất", exact: true }).click();
   await expect(page).toHaveURL(/\/login/);
   await page.goto("/projects");
@@ -108,14 +128,23 @@ test("server pagination, combined URL filters, URL build edit, panel close and a
   await expect(page.getByText("Không tìm thấy kết quả", { exact: false })).toBeVisible();
   await page.getByRole("search").getByRole("link", { name: "Xóa bộ lọc" }).click();
   await page.getByRole("link", { name: "Build URL E2E", exact: true }).click();
-  await page.getByRole("dialog", { name: "Build URL E2E" }).getByRole("button", { name: "Lưu trữ", exact: true }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Lưu trữ", exact: true }).click();
+  await page.getByRole("dialog", { name: "Build URL E2E" }).getByRole("button", { name: "Xóa", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Xóa khỏi danh sách" }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await page.goto("/playables?archived=true");
   await page.getByRole("link", { name: "Build URL E2E", exact: true }).click();
   await page.getByRole("dialog", { name: "Build URL E2E" }).getByRole("button", { name: "Khôi phục", exact: true }).click();
   await page.goto("/playables?q=Build+URL+E2E");
   await expect(page.getByRole("link", { name: "Build URL E2E", exact: true })).toBeVisible();
+  const restoredCard = page.locator("article.playable-card").filter({ has: page.getByRole("link", { name: "Build URL E2E", exact: true }) });
+  await restoredCard.getByRole("button", { name: "Xóa", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Xóa khỏi danh sách" }).click();
+  await page.goto("/playables?archived=true&q=Build+URL+E2E");
+  await restoredCard.getByRole("button", { name: "Xóa vĩnh viễn" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Xóa vĩnh viễn" }).click();
+  await expect(page.getByRole("alertdialog")).toBeHidden();
+  await expect(restoredCard).toBeHidden();
+  await expect.poll(async () => (await (await request.get(`${fixture}/__test/state`)).json()).playables.some((item: { name: string }) => item.name === "Build URL E2E")).toBe(false);
 });
 
 test("direct file upload/download and database failure retain input and clean new assets", async ({ page, request }) => {
@@ -150,6 +179,19 @@ test("direct file upload/download and database failure retain input and clean ne
   const stream = await download.createReadStream();
   const chunks = []; for await (const chunk of stream!) chunks.push(chunk);
   expect(Buffer.concat(chunks).toString()).toBe(contents);
+  await page.goto("/playables?q=Build+file+E2E");
+  await savedCard.getByRole("button", { name: "Xóa", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Xóa khỏi danh sách" }).click();
+  await page.goto("/playables?archived=true&q=Build+file+E2E");
+  await request.post(`${fixture}/__test/fail-next`, { data: { kind: "storage-delete" } });
+  await savedCard.getByRole("button", { name: "Xóa vĩnh viễn" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Xóa vĩnh viễn" }).click();
+  await expect(page.getByRole("alertdialog")).toBeHidden();
+  await expect.poll(async () => (await (await request.get(`${fixture}/__test/state`)).json()).pendingAssetDeletions.length).toBe(1);
+  await expect(page.getByRole("button", { name: "Dọn file chờ xóa" })).toBeVisible();
+  await page.getByRole("button", { name: "Dọn file chờ xóa" }).click();
+  await expect.poll(async () => (await (await request.get(`${fixture}/__test/state`)).json()).pendingAssetDeletions.length).toBe(0);
+  expect((await (await request.get(`${fixture}/__test/state`)).json()).objectCount).toBe(initialObjectCount);
 });
 
 test("HTML covers become static images and live review plays in an isolated responsive dialog", async ({ page, request }) => {

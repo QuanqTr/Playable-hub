@@ -14,11 +14,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
-export function ProjectForm({ profiles, project, onSuccess }: { profiles: Profile[]; project?: Project; onSuccess?: () => void }) {
+export function ProjectForm({ profiles, project, onSuccess, open: controlledOpen, onOpenChange, hideTrigger = false }: { profiles: Profile[]; project?: Project; onSuccess?: () => void; open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean }) {
   const router = useRouter();
   const id = useId();
   const form = useRef<HTMLFormElement>(null);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  function setOpen(next: boolean) {
+    if (controlledOpen === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  }
   const [pending, setPending] = useState(false);
   const [name, setName] = useState(project?.name ?? "");
   const [description, setDescription] = useState(project?.description ?? "");
@@ -59,7 +64,7 @@ export function ProjectForm({ profiles, project, onSuccess }: { profiles: Profil
   }
 
   return <Dialog open={open} onOpenChange={next => { if (!pending) setOpen(next); }}>
-    <DialogTrigger asChild><Button variant={project ? "outline" : "default"}>{project ? <Pencil size={16} /> : <Plus size={17} />}{project ? "Chỉnh sửa" : "Tạo dự án"}</Button></DialogTrigger>
+    {!hideTrigger && <DialogTrigger asChild><Button variant={project ? "outline" : "default"}>{project ? <Pencil size={16} /> : <Plus size={17} />}{project ? "Chỉnh sửa" : "Tạo dự án"}</Button></DialogTrigger>}
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
       <DialogHeader><DialogTitle>{project ? "Chỉnh sửa dự án" : "Tạo dự án"}</DialogTitle><DialogDescription>Quản lý thông tin và người phụ trách chính của dự án.</DialogDescription></DialogHeader>
       <form ref={form} onSubmit={submit} noValidate className="space-y-5">

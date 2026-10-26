@@ -8,11 +8,16 @@ import { deleteArchived } from "@/lib/actions";
 import { Button } from "./ui/button";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "./ui/alert-dialog";
 
-export function PermanentDeleteButton({ kind, id, name, compact = false, redirectTo, onSuccess }: {
-  kind: "project" | "playable"; id: string; name: string; compact?: boolean; redirectTo?: string; onSuccess?: () => void;
+export function PermanentDeleteButton({ kind, id, name, compact = false, redirectTo, onSuccess, open: controlledOpen, onOpenChange, hideTrigger = false }: {
+  kind: "project" | "playable"; id: string; name: string; compact?: boolean; redirectTo?: string; onSuccess?: () => void; open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  function setOpen(next: boolean) {
+    if (controlledOpen === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  }
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const label = kind === "project" ? "dự án" : "playable";
@@ -34,7 +39,7 @@ export function PermanentDeleteButton({ kind, id, name, compact = false, redirec
   }
 
   return <AlertDialog open={open} onOpenChange={next => { if (!pending) { setOpen(next); if (next) setError(""); } }}>
-    <AlertDialogTrigger asChild><Button variant="destructive" size={compact ? "sm" : "default"}><Trash2 size={16} />Xóa vĩnh viễn</Button></AlertDialogTrigger>
+    {!hideTrigger && <AlertDialogTrigger asChild><Button variant="destructive" size={compact ? "sm" : "default"}><Trash2 size={16} />Xóa vĩnh viễn</Button></AlertDialogTrigger>}
     <AlertDialogContent>
       <AlertDialogHeader>
         <AlertDialogTitle>Xóa vĩnh viễn {label}?</AlertDialogTitle>
